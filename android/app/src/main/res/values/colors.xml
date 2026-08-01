@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_top">#0D1226</color>
+    <color name="bg_bottom">#251B4E</color>
+    <color name="accent">#818CF8</color>
+    <color name="accent_violet">#A78BFA</color>
+    <color name="accent_emerald">#34D399</color>
+    <color name="accent_amber">#FBBF24</color>
+    <color name="accent_rose">#FB7185</color>
+    <color name="text_primary">#F1F5F9</color>
+    <color name="text_secondary">#A5B4CC</color>
+    <color name="text_faint">#64748B</color>
+    <color name="glass_fill">#14FFFFFF</color>
+    <color name="glass_stroke">#2EFFFFFF</color>
+    <color name="nav_fill">#ED0B1026</color>
+    <color name="chip_active_bg">#1A34D399</color>
+    <color name="chip_active_fg">#6EE7B7</color>
+    <color name="chip_ready_bg">#1A818CF8</color>
+    <color name="chip_ready_fg">#A5B4FC</color>
+    <color name="chip_soon_bg">#14FFFFFF</color>
+    <color name="chip_soon_fg">#94A3B8</color>
+
+    <color name="agent_codex">#818CF8</color>
+    <color name="agent_openclaw">#A78BFA</color>
+    <color name="agent_opencode">#34D399</color>
+    <color name="agent_hermes">#FBBF24</color>
+    <color name="agent_claude">#FB923C</color>
+    <color name="agent_gemini">#38BDF8</color>
+    <color name="agent_qwen">#FB7185</color>
+    <color name="agent_aider">#2DD4BF</color>
+    <color name="agent_goose">#A3E635</color>
+    <color name="agent_continue">#F472B6</color>
+</resources>

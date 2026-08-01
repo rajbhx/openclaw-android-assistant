@@ -1,6 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AnyClaw</string>
+
+    <!-- Home -->
+    <string name="home_brand">AnyClaw</string>
+    <string name="home_subtitle">Optimized for OnePlus 7 · Android 10 · 8GB</string>
+    <string name="home_environment_label">ENVIRONMENT</string>
+    <string name="home_status_setting_up">Setting up environment…</string>
+    <string name="home_status_detail_setting_up">Preparing runtime for your device</string>
+    <string name="home_status_ready">Environment ready</string>
+    <string name="home_status_detail_ready">Everything is running smoothly</string>
+    <string name="home_status_needs_repair">Needs repair</string>
+    <string name="home_status_background_hint">Setup runs in the background — browse menus freely</string>
+    <string name="home_repair_now">Repair now</string>
+    <string name="home_active_agent_label">ACTIVE AGENT</string>
+    <string name="home_runtime_hint">Runtime not bundled yet — pick Codex or OpenClaw to run now</string>
+    <string name="home_agents_card_title">Agents</string>
+    <string name="home_agents_card_subtitle">Choose your agent</string>
+    <string name="home_repair_card_title">Repair environment</string>
+    <string name="home_repair_card_subtitle">Fix &amp; reinstall missing packages</string>
+
+    <!-- Agents -->
+    <string name="agents_title">Agents</string>
+    <string name="agents_subtitle">Choose which agent you want to run</string>
+    <string name="agents_chip_active">Active</string>
+    <string name="agents_chip_ready">Ready</string>
+    <string name="agents_chip_soon">Coming soon</string>
+    <string name="agents_now_using">Now using %1$s</string>
+    <string name="agents_not_bundled_title">Coming soon</string>
+    <string name="agents_not_bundled_message">The %1$s runtime is not bundled in this build yet. You can still set it as your default agent; Codex and OpenClaw can start right now.</string>
+    <string name="agents_select_anyway">Select anyway</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_account">ACCOUNT</string>
+    <string name="settings_section_system">SYSTEM</string>
+    <string name="settings_section_about">ABOUT</string>
+    <string name="settings_login_title">OpenAI login</string>
+    <string name="settings_login_logged_in">Logged in</string>
+    <string name="settings_login_not_logged_in">Not logged in</string>
+    <string name="settings_server_title">Server</string>
+    <string name="settings_server_running">Running</string>
+    <string name="settings_server_stopped">Stopped</string>
+    <string name="settings_repair_title">Repair environment</string>
+    <string name="settings_version_title">Version</string>
+    <string name="settings_device_title">Device profile</string>
+    <string name="settings_device_value">OnePlus 7 · Android 10 · 8GB RAM</string>
+
+    <!-- Dialogs -->
+    <string name="repair_confirm_title">Repair environment?</string>
+    <string name="repair_confirm_message">This rechecks and reinstalls any missing packages, then restarts the runtime. Your login stays saved.</string>
+    <string name="repair_confirm_yes">Repair</string>
+    <string name="openclaw_install_title">Install OpenClaw?</string>
+    <string name="openclaw_install_message">OpenClaw adds an autonomous multi-agent gateway and Control UI. It is optional and takes extra time and storage. Install it now?</string>
+    <string name="openclaw_install_yes">Install</string>
+    <string name="openclaw_install_no">Skip</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_agents">Agents</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Base setup / login (kept from upstream) -->
     <string name="status_initializing">Initializing…</string>
     <string name="status_extracting_bootstrap">Extracting environment…</string>
     <string name="status_installing_packages">Installing packages (first run)…</string>

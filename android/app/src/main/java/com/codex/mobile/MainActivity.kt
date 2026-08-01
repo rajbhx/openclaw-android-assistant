@@ -13,137 +13,395 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 
+/**
+ * AnyClaw launcher: a native menu UI (Home / Agents / Settings) that lets the
+ * user pick which agent to run. The bundled agent servers (Codex, OpenClaw)
+ * are started in the background; the WebView is only ever shown once the
+ * selected agent's server is actually running.
+ */
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val TAG = "CodexMainActivity"
+        private const val TAG = "AnyClawMain"
+        private const val PREFS = "anyclaw_prefs"
+        private const val KEY_ACTIVE_AGENT = "active_agent"
+        private const val KEY_SETUP_DONE = "setup_done"
+        private const val KEY_OPENCLAW_DECIDED = "openclaw_decided"
+        private const val KEY_OPENCLAW_OPT_IN = "openclaw_opt_in"
+
+        const val SCREEN_HOME = 0
+        const val SCREEN_AGENTS = 1
+        const val SCREEN_SETTINGS = 2
     }
 
-    private lateinit var webView: WebView
-    private lateinit var loadingOverlay: View
-    private lateinit var statusText: TextView
-    private lateinit var statusDetail: TextView
-    private lateinit var progressBar: ProgressBar
+    private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private lateinit var serverManager: CodexServerManager
+
+    // Screens
+    private lateinit var screenHome: View
+    private lateinit var screenAgents: View
+    private lateinit var screenSettings: View
+
+    // Bottom navigation
+    private lateinit var bottomNav: View
+    private lateinit var navHome: View
+    private lateinit var navAgents: View
+    private lateinit var navSettings: View
+    private lateinit var navHomeIcon: ImageView
+    private lateinit var navAgentsIcon: ImageView
+    private lateinit var navSettingsIcon: ImageView
+    private lateinit var navHomeLabel: TextView
+    private lateinit var navAgentsLabel: TextView
+    private lateinit var navSettingsLabel: TextView
+
+    // Home
+    private lateinit var statusTitle: TextView
+    private lateinit var statusDetail: TextView
+    private lateinit var statusDot: View
+    private lateinit var statusHint: TextView
+    private lateinit var statusActionBtn: TextView
+    private lateinit var setupProgress: ProgressBar
+    private lateinit var agentAvatar: TextView
+    private lateinit var agentName: TextView
+    private lateinit var agentTagline: TextView
+    private lateinit var agentRuntimeHint: TextView
+
+    // Agents
+    private lateinit var agentList: RecyclerView
+    private var agentAdapter: AgentAdapter? = null
+
+    // Settings
+    private lateinit var loginStatusText: TextView
+    private lateinit var serverStatusText: TextView
+    private lateinit var versionText: TextView
+
+    // WebView (agent UI — only shown when the server is running)
+    private lateinit var agentWebView: WebView
+    private lateinit var webMenuBtn: View
+
+    @Volatile private var setupRunning = false
+    @Volatile private var openclawUiStarted = false
+    @Volatile private var cachedLoggedIn: Boolean? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        webView = findViewById(R.id.webView)
-        loadingOverlay = findViewById(R.id.loadingOverlay)
-        statusText = findViewById(R.id.statusText)
-        statusDetail = findViewById(R.id.statusDetail)
-        progressBar = findViewById(R.id.progressBar)
-
+        bindViews()
         serverManager = CodexServerManager(this)
+
+        setupNavigation()
+        setupSettings()
+        setupAgentList()
+        setupWebView()
+        updateActiveAgentCard()
+        updateSettingsRows()
+        setupVersion()
 
         requestBatteryOptimizationExemption()
         startForegroundService()
-        setupWebView()
-        startSetupFlow()
+
+        showScreen(SCREEN_HOME)
+
+        if (prefs.getBoolean(KEY_SETUP_DONE, false)) {
+            // Environment already prepared: make sure the runtime is alive.
+            statusTitle.text = getString(R.string.home_status_ready)
+            statusDetail.text = getString(R.string.home_status_detail_ready)
+            setStatusUi(settingUp = false, ok = true)
+            maybeShowWebUi()
+        } else {
+            startSetup()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         serverManager.stopServer()
         stopService(Intent(this, CodexForegroundService::class.java))
-    }
-
-    private fun requestBatteryOptimizationExemption() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
-        val pm = getSystemService(PowerManager::class.java) ?: return
-        if (pm.isIgnoringBatteryOptimizations(packageName)) return
-
         try {
-            @Suppress("BatteryLife")
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = Uri.parse("package:$packageName")
-            }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not request battery optimization exemption: ${e.message}")
+            agentWebView.destroy()
+        } catch (_: Exception) {
         }
     }
 
-    private fun startForegroundService() {
-        val intent = Intent(this, CodexForegroundService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-    }
-
-    @Deprecated("Use onBackPressedDispatcher")
     override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
+        if (agentWebView.visibility == View.VISIBLE) {
+            hideAgentWebUi()
         } else {
             @Suppress("DEPRECATION")
             super.onBackPressed()
         }
     }
 
-    @android.annotation.SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            allowFileAccess = false
-            setSupportZoom(false)
-        }
+    // ── View binding ───────────────────────────────────────────────────────
 
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(
-                view: WebView,
-                url: String,
-            ): Boolean = false
-        }
+    private fun bindViews() {
+        screenHome = findViewById(R.id.screenHome)
+        screenAgents = findViewById(R.id.screenAgents)
+        screenSettings = findViewById(R.id.screenSettings)
 
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
-                Log.d(TAG, "[WebView] ${msg.sourceId()}:${msg.lineNumber()} ${msg.message()}")
-                return true
+        bottomNav = findViewById(R.id.bottomNav)
+        navHome = findViewById(R.id.navHome)
+        navAgents = findViewById(R.id.navAgents)
+        navSettings = findViewById(R.id.navSettings)
+        navHomeIcon = findViewById(R.id.navHomeIcon)
+        navAgentsIcon = findViewById(R.id.navAgentsIcon)
+        navSettingsIcon = findViewById(R.id.navSettingsIcon)
+        navHomeLabel = findViewById(R.id.navHomeLabel)
+        navAgentsLabel = findViewById(R.id.navAgentsLabel)
+        navSettingsLabel = findViewById(R.id.navSettingsLabel)
+
+        statusTitle = findViewById(R.id.statusTitle)
+        statusDetail = findViewById(R.id.statusDetail)
+        statusDot = findViewById(R.id.statusDot)
+        statusHint = findViewById(R.id.statusHint)
+        statusActionBtn = findViewById(R.id.statusActionBtn)
+        setupProgress = findViewById(R.id.setupProgress)
+        agentAvatar = findViewById(R.id.agentAvatar)
+        agentName = findViewById(R.id.agentName)
+        agentTagline = findViewById(R.id.agentTagline)
+        agentRuntimeHint = findViewById(R.id.agentRuntimeHint)
+
+        agentList = findViewById(R.id.agentList)
+
+        loginStatusText = findViewById(R.id.rowLogin).findViewById(R.id.rowValue)
+        serverStatusText = findViewById(R.id.rowServer).findViewById(R.id.rowValue)
+        versionText = findViewById(R.id.rowVersion).findViewById(R.id.rowValue)
+
+        agentWebView = findViewById(R.id.agentWebView)
+        webMenuBtn = findViewById(R.id.webMenuBtn)
+    }
+
+    // ── Navigation ─────────────────────────────────────────────────────────
+
+    private fun setupNavigation() {
+        navHome.setOnClickListener { showScreen(SCREEN_HOME) }
+        navAgents.setOnClickListener { showScreen(SCREEN_AGENTS) }
+        navSettings.setOnClickListener { showScreen(SCREEN_SETTINGS) }
+
+        findViewById<View>(R.id.activeAgentCard).setOnClickListener {
+            showScreen(SCREEN_AGENTS)
+        }
+        findViewById<View>(R.id.quickAgentsCard).setOnClickListener {
+            showScreen(SCREEN_AGENTS)
+        }
+        findViewById<View>(R.id.repairCard).setOnClickListener {
+            confirmRepair()
+        }
+        findViewById<View>(R.id.statusActionBtn).setOnClickListener {
+            confirmRepair()
+        }
+        webMenuBtn.setOnClickListener { hideAgentWebUi() }
+    }
+
+    private fun showScreen(screen: Int) {
+        screenHome.visibility = if (screen == SCREEN_HOME) View.VISIBLE else View.GONE
+        screenAgents.visibility = if (screen == SCREEN_AGENTS) View.VISIBLE else View.GONE
+        screenSettings.visibility = if (screen == SCREEN_SETTINGS) View.VISIBLE else View.GONE
+
+        val activeIcon: ImageView
+        val activeLabel: TextView
+        when (screen) {
+            SCREEN_HOME -> {
+                activeIcon = navHomeIcon
+                activeLabel = navHomeLabel
             }
+            SCREEN_AGENTS -> {
+                activeIcon = navAgentsIcon
+                activeLabel = navAgentsLabel
+            }
+            else -> {
+                activeIcon = navSettingsIcon
+                activeLabel = navSettingsLabel
+            }
+        }
+        setNavState(navHomeIcon, navHomeLabel, active = screen == SCREEN_HOME)
+        setNavState(navAgentsIcon, navAgentsLabel, active = screen == SCREEN_AGENTS)
+        setNavState(navSettingsIcon, navSettingsLabel, active = screen == SCREEN_SETTINGS)
+        updateSettingsRows()
+    }
+
+    private fun setNavState(icon: ImageView, label: TextView, active: Boolean) {
+        val color = if (active) {
+            ContextCompat.getColor(this, R.color.accent)
+        } else {
+            ContextCompat.getColor(this, R.color.text_faint)
+        }
+        icon.drawable.mutate().setTint(color)
+        label.setTextColor(color)
+    }
+
+    private fun setupSettings() {
+        val login = findViewById<View>(R.id.rowLogin)
+        login.setOnClickListener { startLoginFlow() }
+        login.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_account)
+        login.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_login_title)
+
+        val server = findViewById<View>(R.id.rowServer)
+        server.setOnClickListener { toggleServer() }
+        server.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_bolt)
+        server.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_server_title)
+
+        val repair = findViewById<View>(R.id.rowRepair)
+        repair.setOnClickListener { confirmRepair() }
+        repair.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_build)
+        repair.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_repair_title)
+
+        val version = findViewById<View>(R.id.rowVersion)
+        version.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_settings)
+        version.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_version_title)
+
+        val device = findViewById<View>(R.id.rowDevice)
+        device.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_agents)
+        device.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_device_title)
+        device.findViewById<TextView>(R.id.rowValue).setText(R.string.settings_device_value)
+    }
+
+    // ── Agent list ─────────────────────────────────────────────────────────
+
+    private fun setupAgentList() {
+        agentList.layoutManager = LinearLayoutManager(this)
+        agentAdapter = AgentAdapter(
+            agents = AgentCatalog.all,
+            activeAgentId = currentAgent().id,
+            onClick = ::onAgentSelected,
+        )
+        agentList.adapter = agentAdapter
+    }
+
+    private fun currentAgent(): Agent =
+        AgentCatalog.byId(prefs.getString(KEY_ACTIVE_AGENT, "codex") ?: "codex")
+
+    private fun onAgentSelected(agent: Agent) {
+        if (!agent.bundled) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.agents_not_bundled_title)
+                .setMessage(
+                    getString(R.string.agents_not_bundled_message, agent.name)
+                )
+                .setPositiveButton(R.string.agents_select_anyway) { _, _ ->
+                    selectAgent(agent)
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        } else {
+            selectAgent(agent)
         }
     }
 
-    private fun startSetupFlow() {
-        showLoading(true)
-        setStatus("Initializing…")
+    private fun selectAgent(agent: Agent) {
+        prefs.edit().putString(KEY_ACTIVE_AGENT, agent.id).apply()
+        updateActiveAgentCard()
+        agentAdapter?.updateActiveAgent(agent.id)
+        Toast.makeText(this, getString(R.string.agents_now_using, agent.name), Toast.LENGTH_SHORT).show()
+        showScreen(SCREEN_HOME)
+        maybeShowWebUi()
+    }
 
+    private fun updateActiveAgentCard() {
+        val agent = currentAgent()
+        agentAvatar.text = agent.name.first().uppercaseChar().toString()
+        agentAvatar.backgroundTintList = android.content.res.ColorStateList.valueOf(
+            ContextCompat.getColor(this, agent.colorRes)
+        )
+        agentName.text = agent.name
+        agentTagline.text = agent.tagline
+        if (agent.bundled) {
+            agentRuntimeHint.visibility = View.GONE
+        } else {
+            agentRuntimeHint.visibility = View.VISIBLE
+            agentRuntimeHint.text = getString(R.string.home_runtime_hint)
+        }
+    }
+
+    // ── Settings ───────────────────────────────────────────────────────────
+
+    private fun setupVersion() {
+        val version = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.1.1"
+        } catch (_: Exception) {
+            "0.1.1"
+        }
+        versionText.text = version
+    }
+
+    private fun updateSettingsRows() {
+        serverStatusText.text = getString(
+            if (serverManager.isRunning) R.string.settings_server_running else R.string.settings_server_stopped
+        )
+        loginStatusText.text = getString(
+            if (cachedLoggedIn == true) {
+                R.string.settings_login_logged_in
+            } else {
+                R.string.settings_login_not_logged_in
+            }
+        )
+    }
+
+    // ── Setup / repair ─────────────────────────────────────────────────────
+
+    private fun startSetup() {
+        if (setupRunning) return
+        setupRunning = true
+        setStatusUi(
+            settingUp = true,
+            ok = false,
+            title = getString(R.string.home_status_setting_up),
+            detail = getString(R.string.home_status_detail_setting_up),
+        )
         Thread {
             try {
-                runSetup()
+                runEnvironmentSetup()
+                onUi {
+                    setupRunning = false
+                    prefs.edit().putBoolean(KEY_SETUP_DONE, true).apply()
+                    cachedLoggedIn = try { serverManager.isLoggedIn() } catch (e: Exception) { false }
+                    setStatusUi(
+                        settingUp = false,
+                        ok = true,
+                        title = getString(R.string.home_status_ready),
+                        detail = getString(R.string.home_status_detail_ready),
+                    )
+                    maybeAskOpenClaw()
+                    maybeShowWebUi()
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Setup failed", e)
-                runOnUiThread {
-                    showError(e.message ?: "Unknown error")
+                Log.e(TAG, "Environment setup failed", e)
+                onUi {
+                    setupRunning = false
+                    setStatusUi(
+                        settingUp = false,
+                        ok = false,
+                        title = getString(R.string.home_status_needs_repair),
+                        detail = e.message ?: getString(R.string.error_bootstrap),
+                    )
                 }
             }
-        }.start()
+        }.apply { isDaemon = true; start() }
     }
 
-    private fun runSetup() {
+    private fun runEnvironmentSetup() {
         // Step 1: Extract bootstrap
         if (!BootstrapInstaller.isBootstrapInstalled(this)) {
-            updateStatus("Extracting environment…")
-            BootstrapInstaller.install(this) { msg -> updateStatus(msg) }
+            updateStatus(getString(R.string.status_extracting_bootstrap))
+            BootstrapInstaller.install(this) { msg -> updateDetail(msg) }
         }
         updateStatus("Environment ready")
 
-        // Step 1b: Install proot (needed for dpkg/apt-get path remapping)
+        // Step 1b: Install proot
         if (!serverManager.isProotInstalled()) {
             updateStatus("Installing proot…", "Needed for package management")
-            val prootOk = serverManager.installProot { msg -> updateDetail(msg) }
-            if (!prootOk) {
+            if (!serverManager.installProot { msg -> updateDetail(msg) }) {
                 throw RuntimeException("Failed to install proot")
             }
         }
@@ -152,49 +410,30 @@ class MainActivity : AppCompatActivity() {
         // Step 2: Install Node.js
         if (!serverManager.isNodeInstalled()) {
             updateStatus("Installing Node.js (first run)…", "This may take a few minutes")
-            val nodeOk = serverManager.installNode { msg -> updateDetail(msg) }
-            if (!nodeOk) {
+            if (!serverManager.installNode { msg -> updateDetail(msg) }) {
                 throw RuntimeException("Failed to install Node.js")
             }
         }
         updateStatus("Node.js ready")
 
-        // Step 2b: Install Python
+        // Step 2b: Install Python (best effort)
         if (!serverManager.isPythonInstalled()) {
             updateStatus("Installing Python…")
-            val pyOk = serverManager.installPython { msg -> updateDetail(msg) }
-            if (!pyOk) {
+            if (!serverManager.installPython { msg -> updateDetail(msg) }) {
                 Log.w(TAG, "Python install failed — continuing without it")
             }
         }
 
-        // Step 2c: Install bionic-compat.js (Android platform shim for Node.js)
+        // Step 2c: Install bionic-compat.js shim
         serverManager.ensureBionicCompat()
-
-        // Step 2d: Install OpenClaw
-        if (!serverManager.isOpenClawInstalled()) {
-            updateStatus("Installing build dependencies…")
-            serverManager.installOpenClawDeps { msg -> updateDetail(msg) }
-
-            updateStatus("Installing OpenClaw…", "This may take several minutes")
-            val openclawOk = serverManager.installOpenClaw { msg -> updateDetail(msg) }
-            if (!openclawOk) {
-                Log.w(TAG, "OpenClaw install failed — continuing without it")
-            } else {
-                updateStatus("OpenClaw installed")
-            }
-        }
 
         // Step 3: Install Codex CLI
         if (!serverManager.isCodexInstalled()) {
             updateStatus("Installing Codex CLI…", "This may take a few minutes")
-            val codexOk = serverManager.installCodex { msg -> updateDetail(msg) }
-            if (!codexOk) {
+            if (!serverManager.installCodex { msg -> updateDetail(msg) }) {
                 throw RuntimeException("Failed to install Codex")
             }
         }
-
-        // Ensure codex wrapper script exists
         serverManager.ensureCodexWrapperScript()
 
         // Step 3a: Extract web UI from APK assets (every launch)
@@ -204,18 +443,17 @@ class MainActivity : AppCompatActivity() {
         // Step 3b: Install native platform binary
         if (!serverManager.isPlatformBinaryInstalled()) {
             updateStatus("Installing Codex platform binary…")
-            val binOk = serverManager.installPlatformBinary { msg -> updateDetail(msg) }
-            if (!binOk) {
+            if (!serverManager.installPlatformBinary { msg -> updateDetail(msg) }) {
                 throw RuntimeException("Failed to install Codex platform binary")
             }
         }
         updateStatus("Codex ready")
 
-        // Step 3c: Write full-access config and create default workspace
+        // Step 3c: Full-access config + default workspace
         serverManager.ensureFullAccessConfig()
         serverManager.ensureDefaultWorkspace()
 
-        // Step 4: Start CONNECT proxy (needed for native binary DNS/TLS)
+        // Step 4: CONNECT proxy (needed for native binary DNS/TLS)
         updateStatus("Starting network proxy…")
         if (!serverManager.startProxy()) {
             throw RuntimeException("Failed to start network proxy")
@@ -239,8 +477,7 @@ class MainActivity : AppCompatActivity() {
                 if (apiKey.isBlank()) {
                     throw RuntimeException("No API key provided")
                 }
-                val loginOk = serverManager.loginWithApiKey(apiKey)
-                if (!loginOk) {
+                if (!serverManager.loginWithApiKey(apiKey)) {
                     throw RuntimeException("Login failed — check your API key")
                 }
             }
@@ -249,43 +486,278 @@ class MainActivity : AppCompatActivity() {
 
         // Step 6: Health check
         updateStatus("Verifying API access…", "Sending test message")
-        val healthOk = serverManager.healthCheck { msg -> updateDetail(msg) }
-        if (!healthOk) {
+        if (!serverManager.healthCheck { msg -> updateDetail(msg) }) {
             throw RuntimeException("API health check failed — Codex could not reach OpenAI")
         }
         updateStatus("API verified")
 
-        // Step 7: Configure and start OpenClaw
-        if (serverManager.isOpenClawInstalled()) {
-            updateStatus("Configuring OpenClaw…")
-            serverManager.configureOpenClawAuth()
-
-            updateStatus("Starting OpenClaw gateway…")
-            serverManager.startOpenClawGateway()
-
-            updateStatus("Starting OpenClaw Control UI…")
-            serverManager.startOpenClawControlUiServer()
-        }
-
-        // Step 8: Start web server
+        // Step 7: Start web server
         updateStatus("Starting server…")
-        val started = serverManager.startServer()
-        if (!started) {
+        if (!serverManager.startServer()) {
             throw RuntimeException("Failed to start server")
         }
 
-        // Step 9: Wait for ready
+        // Step 8: Wait for ready
         updateStatus("Waiting for server…")
-        val ready = serverManager.waitForServer(timeoutMs = 90_000)
-        if (!ready) {
+        if (!serverManager.waitForServer(timeoutMs = 90_000)) {
             throw RuntimeException("Server did not start in time")
         }
+        updateStatus("Server ready")
+    }
 
-        // Step 10: Show web UI
+    /**
+     * OpenClaw is optional: ask once after the first successful setup, then
+     * install/start it in the background if the user opted in.
+     */
+    private fun maybeAskOpenClaw() {
+        if (serverManager.isOpenClawInstalled()) {
+            ensureOpenClawRunning()
+            return
+        }
+        if (prefs.getBoolean(KEY_OPENCLAW_DECIDED, false)) {
+            if (prefs.getBoolean(KEY_OPENCLAW_OPT_IN, false)) {
+                installOpenClawInBackground()
+            }
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.openclaw_install_title)
+            .setMessage(R.string.openclaw_install_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.openclaw_install_yes) { _, _ ->
+                prefs.edit()
+                    .putBoolean(KEY_OPENCLAW_DECIDED, true)
+                    .putBoolean(KEY_OPENCLAW_OPT_IN, true)
+                    .apply()
+                installOpenClawInBackground()
+            }
+            .setNegativeButton(R.string.openclaw_install_no) { _, _ ->
+                prefs.edit()
+                    .putBoolean(KEY_OPENCLAW_DECIDED, true)
+                    .putBoolean(KEY_OPENCLAW_OPT_IN, false)
+                    .apply()
+            }
+            .show()
+    }
+
+    private fun installOpenClawInBackground() {
+        Thread {
+            try {
+                if (!serverManager.isOpenClawInstalled()) {
+                    updateStatus("Installing build dependencies…")
+                    serverManager.installOpenClawDeps { msg -> updateDetail(msg) }
+
+                    updateStatus("Installing OpenClaw…", "This may take several minutes")
+                    if (!serverManager.installOpenClaw { msg -> updateDetail(msg) }) {
+                        Log.w(TAG, "OpenClaw install failed — continuing without it")
+                        return@Thread
+                    }
+                }
+                serverManager.configureOpenClawAuth()
+                updateStatus("Starting OpenClaw gateway…")
+                serverManager.startOpenClawGateway()
+                updateStatus("Starting OpenClaw Control UI…")
+                serverManager.startOpenClawControlUiServer()
+                openclawUiStarted = true
+                onUi { maybeShowWebUi() }
+            } catch (e: Exception) {
+                Log.e(TAG, "OpenClaw setup failed", e)
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    private fun ensureOpenClawRunning() {
+        Thread {
+            try {
+                serverManager.configureOpenClawAuth()
+                updateStatus("Starting OpenClaw gateway…")
+                serverManager.startOpenClawGateway()
+                updateStatus("Starting OpenClaw Control UI…")
+                serverManager.startOpenClawControlUiServer()
+                openclawUiStarted = true
+                onUi { maybeShowWebUi() }
+            } catch (e: Exception) {
+                Log.e(TAG, "OpenClaw start failed", e)
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    private fun confirmRepair() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.repair_confirm_title)
+            .setMessage(R.string.repair_confirm_message)
+            .setPositiveButton(R.string.repair_confirm_yes) { _, _ ->
+                prefs.edit().putBoolean(KEY_SETUP_DONE, false).apply()
+                hideAgentWebUi()
+                startSetup()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    // ── Login (Settings) ───────────────────────────────────────────────────
+
+    private fun startLoginFlow() {
+        if (!serverManager.isCodexInstalled()) {
+            Toast.makeText(this, R.string.status_installing_codex, Toast.LENGTH_SHORT).show()
+            return
+        }
+        Thread {
+            try {
+                if (!serverManager.isRunning) {
+                    serverManager.startProxy()
+                }
+                updateStatus("Checking authentication…")
+                if (serverManager.isLoggedIn()) {
+                    onUi { Toast.makeText(this, R.string.settings_login_logged_in, Toast.LENGTH_SHORT).show() }
+                } else {
+                    updateStatus("Login required — opening browser…")
+                    val authOk = serverManager.loginWithUrl(
+                        onLoginUrl = { url ->
+                            runOnUiThread {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                        },
+                        onProgress = { msg -> updateDetail(msg) },
+                    )
+                    if (!authOk && !serverManager.isLoggedIn()) {
+                        val apiKey = requestApiKey()
+                        if (apiKey.isNotBlank()) {
+                            serverManager.loginWithApiKey(apiKey)
+                        }
+                    }
+                }
+                onUi {
+                    cachedLoggedIn = try { serverManager.isLoggedIn() } catch (e: Exception) { false }
+                    updateSettingsRows()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Login flow failed", e)
+                onUi { Toast.makeText(this, e.message ?: "Login failed", Toast.LENGTH_LONG).show() }
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    private fun toggleServer() {
+        if (serverManager.isRunning) {
+            serverManager.stopServer()
+            updateSettingsRows()
+            hideAgentWebUi()
+            return
+        }
+        Thread {
+            try {
+                onUi {
+                    Toast.makeText(this, R.string.status_starting_server, Toast.LENGTH_SHORT).show()
+                }
+                updateStatus("Starting server…")
+                if (!serverManager.startServer()) {
+                    throw RuntimeException("Failed to start server")
+                }
+                if (!serverManager.waitForServer(timeoutMs = 90_000)) {
+                    throw RuntimeException("Server did not start in time")
+                }
+                onUi {
+                    updateSettingsRows()
+                    maybeShowWebUi()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Server start failed", e)
+                onUi { Toast.makeText(this, e.message ?: "Server failed", Toast.LENGTH_LONG).show() }
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    // ── Agent Web UI (only shown when the server is running) ───────────────
+
+    @android.annotation.SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView() {
+        agentWebView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            allowFileAccess = false
+            setSupportZoom(false)
+        }
+
+        agentWebView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: WebView,
+                url: String,
+            ): Boolean = false
+        }
+
+        agentWebView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
+                Log.d(TAG, "[WebView] ${msg.sourceId()}:${msg.lineNumber()} ${msg.message()}")
+                return true
+            }
+        }
+    }
+
+    private fun maybeShowWebUi() {
+        val agent = currentAgent()
+        if (!agent.bundled || agent.webUrl == null) return
+        if (!serverManager.isRunning) return
+        if (agent.id == "openclaw" && !openclawUiStarted) return
+        showAgentWebUi(agent.webUrl)
+    }
+
+    private fun showAgentWebUi(url: String) {
+        agentWebView.loadUrl(url)
+        agentWebView.visibility = View.VISIBLE
+        webMenuBtn.visibility = View.VISIBLE
+        bottomNav.visibility = View.GONE
+    }
+
+    private fun hideAgentWebUi() {
+        agentWebView.visibility = View.GONE
+        webMenuBtn.visibility = View.GONE
+        bottomNav.visibility = View.VISIBLE
+        agentWebView.stopLoading()
+    }
+
+    // ── UI helpers ─────────────────────────────────────────────────────────
+
+    private fun onUi(block: () -> Unit) {
         runOnUiThread {
-            showLoading(false)
-            webView.visibility = View.VISIBLE
-            webView.loadUrl("http://127.0.0.1:${CodexServerManager.SERVER_PORT}/")
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            block()
+        }
+    }
+
+    private fun setStatusUi(
+        settingUp: Boolean,
+        ok: Boolean,
+        title: String? = null,
+        detail: String? = null,
+    ) {
+        if (title != null) statusTitle.text = title
+        if (detail != null) statusDetail.text = detail
+        setupProgress.visibility = if (settingUp) View.VISIBLE else View.GONE
+        statusActionBtn.visibility = if (!settingUp && !ok) View.VISIBLE else View.GONE
+        statusHint.visibility = if (settingUp) View.VISIBLE else View.GONE
+        statusDot.backgroundTintList = android.content.res.ColorStateList.valueOf(
+            ContextCompat.getColor(
+                this,
+                when {
+                    settingUp -> R.color.accent_amber
+                    ok -> R.color.accent_emerald
+                    else -> R.color.accent_rose
+                },
+            )
+        )
+    }
+
+    private fun updateStatus(text: String, detail: String? = null) {
+        onUi { setStatusUi(settingUp = true, ok = false, title = text, detail = detail) }
+    }
+
+    private fun updateDetail(text: String) {
+        onUi {
+            statusDetail.text = text
+            statusDetail.visibility = View.VISIBLE
         }
     }
 
@@ -328,44 +800,28 @@ class MainActivity : AppCompatActivity() {
         return result
     }
 
-    // ── UI helpers ──────────────────────────────────────────────────────────
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val pm = getSystemService(PowerManager::class.java) ?: return
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
 
-    private fun showError(message: String) {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.error_title)
-            .setMessage(message)
-            .setPositiveButton(R.string.retry) { _, _ ->
-                startSetupFlow()
+        try {
+            @Suppress("BatteryLife")
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
             }
-            .setNegativeButton(R.string.cancel) { _, _ ->
-                finish()
-            }
-            .setCancelable(false)
-            .show()
-    }
-
-    private fun showLoading(show: Boolean) {
-        loadingOverlay.visibility = if (show) View.VISIBLE else View.GONE
-    }
-
-    private fun setStatus(text: String, detail: String? = null) {
-        statusText.text = text
-        if (detail != null) {
-            statusDetail.text = detail
-            statusDetail.visibility = View.VISIBLE
-        } else {
-            statusDetail.visibility = View.GONE
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not request battery optimization exemption: ${e.message}")
         }
     }
 
-    private fun updateStatus(text: String, detail: String? = null) {
-        runOnUiThread { setStatus(text, detail) }
-    }
-
-    private fun updateDetail(text: String) {
-        runOnUiThread {
-            statusDetail.text = text
-            statusDetail.visibility = View.VISIBLE
+    private fun startForegroundService() {
+        val intent = Intent(this, CodexForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
         }
     }
 }
