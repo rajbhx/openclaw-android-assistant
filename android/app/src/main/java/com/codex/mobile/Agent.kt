@@ -50,7 +50,7 @@ object AgentCatalog {
             colorRes = R.color.agent_opencode,
             bundled = false,
             webUrl = null,
-            installCommand = "npm install -g opencode-ai",
+            installCommand = "npm install -g --os=linux --cpu=arm64 --libc=musl opencode-ai || npm install -g opencode-linux-arm64-musl",
         ),
         Agent(
             id = "hermes",

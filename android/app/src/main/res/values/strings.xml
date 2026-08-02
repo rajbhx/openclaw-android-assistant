@@ -80,7 +80,7 @@
 
     <!-- Install guides for agents that are not bundled in this build yet -->
     <string name="guide_coming_soon">This agent\'s runtime is not bundled in this build yet. A guide will be added when it is available.</string>
-    <string name="guide_opencode">OpenCode (SST)\n\nInstall the runtime (Termux/proot):\nnpm install -g opencode-ai\n\nFree models: OpenCode works with free/open models (GLM, DeepSeek, Qwen, etc.) via models.dev providers — run `opencode models` to pick one, or set OPENAI_API_KEY for a paid provider.\n\nGuide: https://opencode.ai/docs</string>
+    <string name="guide_opencode">OpenCode (SST)\n\nInstall the runtime (Termux/proot):\nnpm install -g --os=linux --cpu=arm64 --libc=musl opencode-ai\n(if npm rejects the flags, try: npm install -g opencode-linux-arm64-musl)\n\nFree models: OpenCode works with free/open models (GLM, DeepSeek, Qwen, etc.) via models.dev providers — run `opencode models` to pick one, or set OPENAI_API_KEY for a paid provider.\n\nGuide: https://opencode.ai/docs</string>
     <string name="guide_hermes">Hermes (Nous Research)\n\nThe Hermes agent runtime is not available for Android yet. It will be bundled in a future build.\n\nTrack: https://nousresearch.com/hermes</string>
     <string name="guide_claude">Claude Code (Anthropic)\n\nInstall the runtime (Termux/proot):\nnpm install -g @anthropic-ai/claude-code\n\nRequires an Anthropic account and login:\nclaude login\n\nGuide: https://docs.anthropic.com/claude-code</string>
     <string name="guide_gemini">Gemini CLI (Google)\n\nInstall the runtime (Termux/proot):\nnpm install -g @google/gemini-cli\n\nRequires a Google account; login with:\ngemini login\n\nGuide: https://github.com/google-gemini/gemini-cli</string>
