@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.text.InputType
 import android.util.Log
 import android.view.View
 import android.webkit.ConsoleMessage
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity() {
 
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private lateinit var serverManager: CodexServerManager
+    private val sshManager by lazy { SshManager(this) }
 
     // Screens
     private lateinit var screenHome: View
@@ -78,6 +80,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var agentRuntimeHint: TextView
     private lateinit var launchAgentBtn: TextView
     private lateinit var buildTag: TextView
+    private lateinit var sshStatusText: TextView
+    private lateinit var sshStartBtn: TextView
+    private lateinit var sshPasswordBtn: TextView
+    private lateinit var sshConnectionText: TextView
 
     // Agents
     private lateinit var agentList: RecyclerView
@@ -177,6 +183,10 @@ class MainActivity : AppCompatActivity() {
         agentRuntimeHint = findViewById(R.id.agentRuntimeHint)
         launchAgentBtn = findViewById(R.id.launchAgentBtn)
         buildTag = findViewById(R.id.buildTag)
+        sshStatusText = findViewById(R.id.sshStatusText)
+        sshStartBtn = findViewById(R.id.sshStartBtn)
+        sshPasswordBtn = findViewById(R.id.sshPasswordBtn)
+        sshConnectionText = findViewById(R.id.sshConnectionText)
 
         agentList = findViewById(R.id.agentList)
 
@@ -217,11 +227,18 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.terminalCard).setOnClickListener {
             startActivity(Intent(this, TerminalActivity::class.java))
         }
+        sshStartBtn.setOnClickListener { toggleSsh() }
+        sshPasswordBtn.setOnClickListener { promptSshPassword() }
         findViewById<View>(R.id.statusActionBtn).setOnClickListener {
             confirmRepair()
         }
         launchAgentBtn.setOnClickListener { launchActiveAgent() }
         webMenuBtn.setOnClickListener { hideAgentWebUi() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshSshCard()
     }
 
     private fun showScreen(screen: Int) {
@@ -732,6 +749,90 @@ class MainActivity : AppCompatActivity() {
                                 detail = e.message ?: getString(R.string.error_bootstrap),
                             )
                         }
+                    }
+                }.apply { isDaemon = true; start() }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    // ── SSH (remote control) ──────────────────────────────────────────────
+
+    private fun refreshSshCard() {
+        val running = sshManager.isRunning
+        sshStatusText.setText(
+            if (running) {
+                getString(R.string.ssh_status_running, SshManager.SSH_PORT)
+            } else {
+                R.string.ssh_status_stopped
+            }
+        )
+        sshStartBtn.setText(if (running) R.string.ssh_stop else R.string.ssh_start)
+        if (running) {
+            val ip = sshManager.localIpAddress()
+            sshConnectionText.visibility = View.VISIBLE
+            sshConnectionText.text = if (ip != null) {
+                getString(R.string.ssh_connect_hint, SshManager.SSH_PORT, ip)
+            } else {
+                getString(R.string.ssh_no_ip)
+            }
+        } else {
+            sshConnectionText.visibility = View.GONE
+        }
+    }
+
+    private fun toggleSsh() {
+        if (sshManager.isRunning) {
+            sshStartBtn.isEnabled = false
+            Thread {
+                sshManager.stop()
+                onUi {
+                    sshStartBtn.isEnabled = true
+                    refreshSshCard()
+                }
+            }.apply { isDaemon = true; start() }
+            return
+        }
+        if (!sshManager.isPasswordSet()) {
+            Toast.makeText(this, R.string.ssh_no_password, Toast.LENGTH_SHORT).show()
+            promptSshPassword()
+            return
+        }
+        sshStartBtn.isEnabled = false
+        Thread {
+            val ok = sshManager.start { msg -> Log.d(TAG, "[ssh] $msg") }
+            onUi {
+                sshStartBtn.isEnabled = true
+                refreshSshCard()
+                if (!ok) {
+                    Toast.makeText(this, R.string.ssh_failed, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    private fun promptSshPassword() {
+        val input = EditText(this).apply {
+            hint = getString(R.string.ssh_password_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        val padding = (24 * resources.displayMetrics.density).toInt()
+        val container = android.widget.FrameLayout(this).apply {
+            setPadding(padding, padding / 2, padding, 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.ssh_password_dialog_title)
+            .setMessage(R.string.ssh_password_dialog_message)
+            .setView(container)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val password = input.text.toString()
+                Thread {
+                    sshManager.setPassword(password)
+                    onUi {
+                        refreshSshCard()
+                        Toast.makeText(this, R.string.ssh_password_saved, Toast.LENGTH_SHORT).show()
                     }
                 }.apply { isDaemon = true; start() }
             }

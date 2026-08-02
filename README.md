@@ -245,6 +245,25 @@ clawcode-android/                     # Claw Code / OpenClaude (Python + Rust)
 
 ---
 
+## 🔑 SSH Access
+
+The app includes a **Dropbear SSH server** so you can log into the phone's
+Linux environment from a computer and fix things without touching the app UI
+(Home → **SSH access**):
+
+- Set a password (Home → SSH access → **Set password**), then tap **Start SSH**.
+- Connect over Wi-Fi: `ssh -p 8022 root@<phone-ip>` — any username works, the
+  app authenticates the password itself (Termux `termux-auth`).
+- The server runs under `proot`, which maps the app's private data dir onto
+  the Termux paths the Dropbear binary was built with, so the login shell and
+  password file resolve to the app's real environment.
+- You get the exact same environment as the in-app Terminal (Node, npm,
+  Codex CLI, proot, apt). SSH only listens while you keep it started.
+- Optional: add your own public keys to `~/.ssh/authorized_keys` inside the
+  app's home dir for key-based logins.
+
+---
+
 ## 🎯 Requirements
 
 - 📱 **Android 7.0+** (API 24) — ARM64 device

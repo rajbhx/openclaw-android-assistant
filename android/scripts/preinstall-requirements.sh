@@ -51,6 +51,7 @@ REPO_BASE="https://packages.termux.dev/apt/termux-main"
 # compile native modules at install time and is not used at runtime.
 PACKAGES=(
     proot libtalloc termux-exec
+    dropbear zlib termux-auth openssl
     c-ares libicu libsqlite nodejs-lts npm
     python python-pip
     git make

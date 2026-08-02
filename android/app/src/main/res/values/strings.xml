@@ -25,6 +25,23 @@
     <string name="home_terminal_card_title">Terminal</string>
     <string name="home_terminal_card_subtitle">Manual shell for fixing</string>
 
+    <!-- SSH -->
+    <string name="home_ssh_card_title">SSH access</string>
+    <string name="home_ssh_card_subtitle">Remote shell to fix errors — same environment as the terminal</string>
+    <string name="ssh_status_stopped">Stopped</string>
+    <string name="ssh_status_running">Running · port %1$d</string>
+    <string name="ssh_start">Start SSH</string>
+    <string name="ssh_stop">Stop SSH</string>
+    <string name="ssh_set_password">Set password</string>
+    <string name="ssh_password_dialog_title">SSH password</string>
+    <string name="ssh_password_dialog_message">Set the password used for SSH logins (any username works). Leave blank to disable password login.</string>
+    <string name="ssh_password_hint">Password</string>
+    <string name="ssh_password_saved">SSH password saved</string>
+    <string name="ssh_no_password">Set an SSH password first</string>
+    <string name="ssh_connect_hint">ssh -p %1$d root@%2$s</string>
+    <string name="ssh_no_ip">No network IP found — check Wi-Fi</string>
+    <string name="ssh_failed">SSH failed to start — check logcat for details</string>
+
     <string name="home_repair_card_title">Repair environment</string>
     <string name="home_repair_card_subtitle">Fix &amp; reinstall missing packages</string>
 
