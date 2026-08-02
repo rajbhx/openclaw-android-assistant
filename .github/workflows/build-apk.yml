@@ -126,7 +126,7 @@ jobs:
           path: android/app/build/outputs/anyclaw.apk
 
       - name: Generate changelog
-        if: github.event_name == 'workflow_dispatch' && inputs.create_release == true
+        if: github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true')
         id: changelog
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | head -1)
@@ -142,7 +142,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
-        if: github.event_name == 'workflow_dispatch' && inputs.create_release == true
+        if: github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}

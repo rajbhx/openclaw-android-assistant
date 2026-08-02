@@ -42,6 +42,7 @@ def is_binary(path):
 def rewrite_text_files(prefix, old, new):
     """Replace `old` with `new` in every text file under prefix (lossless)."""
     n = 0
+    old_bytes = old.encode("latin-1")
     for p in walk_files(prefix):
         if os.path.islink(p) or is_binary(p):
             continue
@@ -50,7 +51,7 @@ def rewrite_text_files(prefix, old, new):
                 data = f.read()
         except OSError:
             continue
-        if old not in data:
+        if old_bytes not in data:
             continue
         # latin-1 round-trips every byte, so nothing is corrupted even for
         # files with non-UTF-8 content; the path strings are pure ASCII.
