@@ -5,9 +5,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -94,7 +96,17 @@ class TerminalActivity : AppCompatActivity(), TerminalViewClient, TerminalSessio
 
         // Attach once the view has a real size so the PTY can be created
         // with the correct column/row count.
-        terminalView.post { terminalView.attachSession(newSession) }
+        terminalView.post {
+            terminalView.attachSession(newSession)
+            terminalView.requestFocus()
+            showKeyboard()
+        }
+    }
+
+    private fun showKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            ?: return
+        imm.showSoftInput(terminalView, 0)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -111,7 +123,17 @@ class TerminalActivity : AppCompatActivity(), TerminalViewClient, TerminalSessio
 
     override fun onScale(scale: Float): Float = scale
 
-    override fun onSingleTapUp(e: MotionEvent) = Unit
+    override fun onSingleTapUp(e: MotionEvent) {
+        // Same behavior as Termux: tapping the terminal raises the soft
+        // keyboard unless the app is in mouse-tracking mode (e.g. vim) or
+        // the event came from a real mouse.
+        val emulator = terminalView.mEmulator
+        if ((emulator == null || !emulator.isMouseTrackingActive()) &&
+            !e.isFromSource(InputDevice.SOURCE_MOUSE)
+        ) {
+            showKeyboard()
+        }
+    }
 
     override fun shouldBackButtonBeMappedToEscape(): Boolean = true
 
