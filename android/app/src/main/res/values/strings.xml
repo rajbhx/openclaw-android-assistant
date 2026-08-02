@@ -18,7 +18,8 @@
     <string name="home_runtime_hint">Runtime not bundled yet — pick Codex or OpenClaw to run now</string>
     <string name="home_agents_card_title">Agents</string>
     <string name="home_agents_card_subtitle">Choose your agent</string>
-    <string name="home_launch_agent">Open agent UI</string>
+    <string name="home_launch_agent">Start agent</string>
+    <string name="home_stop_agent">Stop</string>
     <string name="home_build_tag">v%1$s · OnePlus 7 build</string>
     <string name="build_welcome_title">AnyClaw OP7</string>
     <string name="build_welcome_message">This is build v%1$s, signed with the stable OnePlus 7 key. If your launcher shows a different icon or name, you are opening an older AnyClaw — uninstall it first, then install this APK.</string>
@@ -58,6 +59,8 @@
     <string name="agents_install_in_terminal">Install in terminal</string>
     <string name="agents_wait_setup">Environment is still setting up — wait for it to finish, then Run again</string>
     <string name="agents_openclaw_not_installed">OpenClaw is not installed yet. Choose Install in the dialog to add it.</string>
+    <string name="agents_not_running">Agent is not running</string>
+    <string name="agents_stopped">%1$s stopped</string>
 
     <!-- Install guides for agents that are not bundled in this build yet -->
     <string name="guide_coming_soon">This agent\'s runtime is not bundled in this build yet. A guide will be added when it is available.</string>

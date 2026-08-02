@@ -260,19 +260,42 @@
                 android:textSize="11sp"
                 android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/launchAgentBtn"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="44dp"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:background="@drawable/bg_pill"
-                android:backgroundTint="@color/accent"
-                android:gravity="center"
-                android:text="@string/home_launch_agent"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/agentStopBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_pill"
+                    android:backgroundTint="@color/nav_fill"
+                    android:gravity="center"
+                    android:text="@string/home_stop_agent"
+                    android:textColor="@color/text_faint"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <Space
+                    android:layout_width="10dp"
+                    android:layout_height="1dp" />
+
+                <TextView
+                    android:id="@+id/agentStartBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_pill"
+                    android:backgroundTint="@color/accent"
+                    android:gravity="center"
+                    android:text="@string/home_launch_agent"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Quick actions -->

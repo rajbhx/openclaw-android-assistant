@@ -78,7 +78,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var agentName: TextView
     private lateinit var agentTagline: TextView
     private lateinit var agentRuntimeHint: TextView
-    private lateinit var launchAgentBtn: TextView
+    private lateinit var agentStartBtn: TextView
+    private lateinit var agentStopBtn: TextView
     private lateinit var buildTag: TextView
     private lateinit var sshStatusText: TextView
     private lateinit var sshStartBtn: TextView
@@ -128,7 +129,7 @@ class MainActivity : AppCompatActivity() {
             statusTitle.text = getString(R.string.home_status_ready)
             statusDetail.text = getString(R.string.home_status_detail_ready)
             setStatusUi(settingUp = false, ok = true)
-            refreshLaunchButton()
+            refreshAgentButtons()
         } else {
             startSetup()
         }
@@ -181,7 +182,8 @@ class MainActivity : AppCompatActivity() {
         agentName = findViewById(R.id.agentName)
         agentTagline = findViewById(R.id.agentTagline)
         agentRuntimeHint = findViewById(R.id.agentRuntimeHint)
-        launchAgentBtn = findViewById(R.id.launchAgentBtn)
+        agentStartBtn = findViewById(R.id.agentStartBtn)
+        agentStopBtn = findViewById(R.id.agentStopBtn)
         buildTag = findViewById(R.id.buildTag)
         sshStatusText = findViewById(R.id.sshStatusText)
         sshStartBtn = findViewById(R.id.sshStartBtn)
@@ -232,7 +234,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.statusActionBtn).setOnClickListener {
             confirmRepair()
         }
-        launchAgentBtn.setOnClickListener { launchActiveAgent() }
+        agentStartBtn.setOnClickListener { launchActiveAgent() }
+        agentStopBtn.setOnClickListener { stopActiveAgent() }
         webMenuBtn.setOnClickListener { hideAgentWebUi() }
     }
 
@@ -391,7 +394,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 onUi {
                     updateSettingsRows()
-                    refreshLaunchButton()
+                    refreshAgentButtons()
                     showAgentWebUi(url)
                 }
             } catch (e: Exception) {
@@ -409,7 +412,7 @@ class MainActivity : AppCompatActivity() {
         agentAdapter?.updateActiveAgent(agent.id)
         Toast.makeText(this, getString(R.string.agents_now_using, agent.name), Toast.LENGTH_SHORT).show()
         showScreen(SCREEN_HOME)
-        refreshLaunchButton()
+        refreshAgentButtons()
     }
 
     private fun updateActiveAgentCard() {
@@ -426,7 +429,7 @@ class MainActivity : AppCompatActivity() {
             agentRuntimeHint.visibility = View.VISIBLE
             agentRuntimeHint.text = getString(R.string.home_runtime_hint)
         }
-        refreshLaunchButton()
+        refreshAgentButtons()
     }
 
     // ── Settings ───────────────────────────────────────────────────────────
@@ -685,7 +688,7 @@ class MainActivity : AppCompatActivity() {
                 serverManager.waitForPort(CodexServerManager.OPENCLAW_CONTROL_UI_PORT, 60_000)
                 openclawUiStarted = true
                 onUi {
-                    refreshLaunchButton()
+                    refreshAgentButtons()
                     onReady?.invoke()
                 }
             } catch (e: Exception) {
@@ -705,7 +708,7 @@ class MainActivity : AppCompatActivity() {
                 serverManager.waitForPort(CodexServerManager.OPENCLAW_CONTROL_UI_PORT, 60_000)
                 openclawUiStarted = true
                 onUi {
-                    refreshLaunchButton()
+                    refreshAgentButtons()
                     onReady?.invoke()
                 }
             } catch (e: Exception) {
@@ -944,7 +947,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 onUi {
                     updateSettingsRows()
-                    refreshLaunchButton()
+                    refreshAgentButtons()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Server start failed", e)
@@ -980,12 +983,68 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun refreshLaunchButton() {
+    private fun refreshAgentButtons() {
         val agent = currentAgent()
-        val canLaunch = agent.bundled && agent.webUrl != null &&
-            serverManager.isRunning &&
-            (agent.id != "openclaw" || openclawUiStarted)
-        launchAgentBtn.visibility = if (canLaunch) View.VISIBLE else View.GONE
+        // Start/Stop are always visible; labels reflect what the button does.
+        agentStartBtn.text = getString(
+            if (agent.bundled && agent.webUrl != null) {
+                R.string.home_launch_agent
+            } else {
+                R.string.agents_install
+            }
+        )
+        val running = isActiveAgentRunning(agent)
+        agentStopBtn.setTextColor(
+            ContextCompat.getColor(
+                this,
+                if (running) R.color.chip_ready_fg else R.color.text_faint,
+            )
+        )
+        agentStopBtn.backgroundTintList = android.content.res.ColorStateList.valueOf(
+            ContextCompat.getColor(
+                this,
+                if (running) R.color.chip_ready_bg else R.color.nav_fill,
+            )
+        )
+    }
+
+    private fun isActiveAgentRunning(agent: Agent): Boolean = when (agent.id) {
+        "openclaw" -> serverManager.isOpenClawRunning()
+        "codex" -> serverManager.isRunning
+        else -> false
+    }
+
+    /**
+     * Stops the active agent's server (Codex web server, or the OpenClaw
+     * gateway + Control UI) and hides its web UI. Safe to tap anytime.
+     */
+    private fun stopActiveAgent() {
+        val agent = currentAgent()
+        val stopping = isActiveAgentRunning(agent)
+        Thread {
+            when {
+                agent.id == "openclaw" -> {
+                    openclawUiStarted = false
+                    serverManager.stopOpenClawServers()
+                }
+                stopping -> serverManager.stopServer()
+                else -> Unit
+            }
+            onUi {
+                hideAgentWebUi()
+                updateSettingsRows()
+                refreshAgentButtons()
+                Toast.makeText(
+                    this,
+                    if (stopping) {
+                        getString(R.string.agents_stopped, agent.name)
+                    } else {
+                        getString(R.string.agents_not_running)
+                    },
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }.apply { isDaemon = true; start() }
     }
 
     private fun launchActiveAgent() {

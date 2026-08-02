@@ -1379,6 +1379,29 @@ WEOF
         return false
     }
 
+    /**
+     * True when either the OpenClaw gateway or its Control UI server is
+     * still running (so the UI can show Stop instead of a dead Start).
+     */
+    fun isOpenClawRunning(): Boolean =
+        isProcessRunning(openClawGatewayProcess) ||
+            isProcessRunning(openClawControlUiProcess)
+
+    /** Stop just the OpenClaw gateway + Control UI servers. */
+    fun stopOpenClawServers() {
+        stopOpenClaw()
+    }
+
+    private fun isProcessRunning(proc: Process?): Boolean {
+        if (proc == null) return false
+        return try {
+            proc.exitValue()
+            false
+        } catch (_: IllegalThreadStateException) {
+            true
+        }
+    }
+
     fun stopServer() {
         val proc = serverProcess ?: return
         serverProcess = null
