@@ -326,7 +326,8 @@ class MainActivity : AppCompatActivity() {
      * the install guide instead.
      */
     private fun onRunAgent(agent: Agent) {
-        if (!agent.bundled || agent.webUrl == null) {
+        val url = agent.webUrl
+        if (!agent.bundled || url == null) {
             showInstallGuide(agent)
             return
         }
@@ -334,7 +335,7 @@ class MainActivity : AppCompatActivity() {
         when (agent.id) {
             "openclaw" -> {
                 if (serverManager.isOpenClawInstalled()) {
-                    ensureOpenClawRunning(onReady = { showAgentWebUi(agent.webUrl) })
+                    ensureOpenClawRunning(onReady = { showAgentWebUi(url) })
                 } else {
                     Toast.makeText(
                         this,
@@ -344,7 +345,7 @@ class MainActivity : AppCompatActivity() {
                     maybeAskOpenClaw()
                 }
             }
-            else -> startServerAndOpen(agent.webUrl)
+            else -> startServerAndOpen(url)
         }
     }
 

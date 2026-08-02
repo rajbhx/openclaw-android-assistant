@@ -40,7 +40,7 @@
     <string name="agents_openclaw_not_installed">OpenClaw is not installed yet. Choose Install in the dialog to add it.</string>
 
     <!-- Install guides for agents that are not bundled in this build yet -->
-    <string name="guide_coming_soon">This agent's runtime is not bundled in this build yet. A guide will be added when it is available.</string>
+    <string name="guide_coming_soon">This agent\'s runtime is not bundled in this build yet. A guide will be added when it is available.</string>
     <string name="guide_opencode">OpenCode (SST)\n\nInstall the runtime (Termux/proot):\nnpm install -g opencode-ai\n\nGuide: https://opencode.ai/docs\n\nOnce installed, the app will be able to launch it as the active agent.</string>
     <string name="guide_hermes">Hermes (Nous Research)\n\nThe Hermes agent runtime is not available for Android yet. It will be bundled in a future build.\n\nTrack: https://nousresearch.com/hermes</string>
     <string name="guide_claude">Claude Code (Anthropic)\n\nInstall the runtime (Termux/proot):\nnpm install -g @anthropic-ai/claude-code\n\nRequires an Anthropic account and login:\nclaude login\n\nGuide: https://docs.anthropic.com/claude-code</string>
