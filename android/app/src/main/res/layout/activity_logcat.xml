@@ -24,6 +24,24 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/logClearBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_pill"
+            android:backgroundTint="@color/nav_fill"
+            android:gravity="center"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/log_clear"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="1dp" />
+
+        <TextView
             android:id="@+id/logCloseBtn"
             android:layout_width="wrap_content"
             android:layout_height="34dp"

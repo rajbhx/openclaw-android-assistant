@@ -62,6 +62,7 @@ class LogcatActivity : AppCompatActivity() {
         logOutput = findViewById(R.id.logOutput)
         autoBtn = findViewById(R.id.logAutoBtn)
 
+        findViewById<View>(R.id.logClearBtn).setOnClickListener { clearLogs() }
         findViewById<View>(R.id.logRefreshBtn).setOnClickListener { dumpLogs() }
         findViewById<View>(R.id.logCloseBtn).setOnClickListener { finish() }
         findViewById<View>(R.id.logCopyBtn).setOnClickListener { copyLogs() }
@@ -69,7 +70,9 @@ class LogcatActivity : AppCompatActivity() {
         autoBtn.setOnClickListener {
             autoRefresh.set(!autoRefresh.get())
             updateAutoLabel()
-            if (autoRefresh.get()) dumpLogs()
+            // Starting the live view clears the logcat buffer once so the
+            // stream only shows fresh lines from here on.
+            if (autoRefresh.get()) clearLogs()
         }
 
         updateAutoLabel()
@@ -84,6 +87,24 @@ class LogcatActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(refreshTick)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacks(refreshTick)
+    }
+
+    /** Clear the logcat ring buffer, then show what is left. */
+    private fun clearLogs() {
+        Thread {
+            runCatching {
+                ProcessBuilder("logcat", "-c").start().waitFor()
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                dumpLogs()
+            }
+        }.apply { isDaemon = true; start() }
     }
 
     private fun copyLogs() {

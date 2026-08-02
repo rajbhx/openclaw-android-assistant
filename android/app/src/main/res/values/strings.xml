@@ -35,6 +35,7 @@
     <string name="log_refresh">Refresh</string>
     <string name="log_auto_on">Auto: ON</string>
     <string name="log_auto_off">Auto: OFF</string>
+    <string name="log_clear">Clear</string>
     <string name="log_close">Close</string>
     <string name="log_copy">Copy</string>
     <string name="log_export">Export</string>
