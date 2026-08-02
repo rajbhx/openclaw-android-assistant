@@ -17,6 +17,8 @@
     <string name="home_runtime_hint">Runtime not bundled yet — pick Codex or OpenClaw to run now</string>
     <string name="home_agents_card_title">Agents</string>
     <string name="home_agents_card_subtitle">Choose your agent</string>
+    <string name="home_launch_agent">Open agent UI</string>
+    <string name="home_build_tag">v%1$s · OnePlus 7 build</string>
     <string name="home_repair_card_title">Repair environment</string>
     <string name="home_repair_card_subtitle">Fix &amp; reinstall missing packages</string>
 

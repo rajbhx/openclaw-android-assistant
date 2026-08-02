@@ -75,6 +75,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var agentName: TextView
     private lateinit var agentTagline: TextView
     private lateinit var agentRuntimeHint: TextView
+    private lateinit var launchAgentBtn: TextView
+    private lateinit var buildTag: TextView
 
     // Agents
     private lateinit var agentList: RecyclerView
@@ -118,7 +120,7 @@ class MainActivity : AppCompatActivity() {
             statusTitle.text = getString(R.string.home_status_ready)
             statusDetail.text = getString(R.string.home_status_detail_ready)
             setStatusUi(settingUp = false, ok = true)
-            maybeShowWebUi()
+            refreshLaunchButton()
         } else {
             startSetup()
         }
@@ -171,6 +173,8 @@ class MainActivity : AppCompatActivity() {
         agentName = findViewById(R.id.agentName)
         agentTagline = findViewById(R.id.agentTagline)
         agentRuntimeHint = findViewById(R.id.agentRuntimeHint)
+        launchAgentBtn = findViewById(R.id.launchAgentBtn)
+        buildTag = findViewById(R.id.buildTag)
 
         agentList = findViewById(R.id.agentList)
 
@@ -211,6 +215,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.statusActionBtn).setOnClickListener {
             confirmRepair()
         }
+        launchAgentBtn.setOnClickListener { launchActiveAgent() }
         webMenuBtn.setOnClickListener { hideAgentWebUi() }
     }
 
@@ -315,7 +320,7 @@ class MainActivity : AppCompatActivity() {
         agentAdapter?.updateActiveAgent(agent.id)
         Toast.makeText(this, getString(R.string.agents_now_using, agent.name), Toast.LENGTH_SHORT).show()
         showScreen(SCREEN_HOME)
-        maybeShowWebUi()
+        refreshLaunchButton()
     }
 
     private fun updateActiveAgentCard() {
@@ -332,6 +337,7 @@ class MainActivity : AppCompatActivity() {
             agentRuntimeHint.visibility = View.VISIBLE
             agentRuntimeHint.text = getString(R.string.home_runtime_hint)
         }
+        refreshLaunchButton()
     }
 
     // ── Settings ───────────────────────────────────────────────────────────
@@ -343,6 +349,7 @@ class MainActivity : AppCompatActivity() {
             "0.1.1"
         }
         versionText.text = version
+        buildTag.text = getString(R.string.home_build_tag, version)
     }
 
     private fun updateSettingsRows() {
@@ -383,7 +390,7 @@ class MainActivity : AppCompatActivity() {
                         detail = getString(R.string.home_status_detail_ready),
                     )
                     maybeAskOpenClaw()
-                    maybeShowWebUi()
+                    refreshLaunchButton()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Environment setup failed", e)
@@ -570,7 +577,7 @@ class MainActivity : AppCompatActivity() {
                 updateStatus("Starting OpenClaw Control UI…")
                 serverManager.startOpenClawControlUiServer()
                 openclawUiStarted = true
-                onUi { maybeShowWebUi() }
+                onUi { refreshLaunchButton() }
             } catch (e: Exception) {
                 Log.e(TAG, "OpenClaw setup failed", e)
             }
@@ -586,7 +593,7 @@ class MainActivity : AppCompatActivity() {
                 updateStatus("Starting OpenClaw Control UI…")
                 serverManager.startOpenClawControlUiServer()
                 openclawUiStarted = true
-                onUi { maybeShowWebUi() }
+                onUi { refreshLaunchButton() }
             } catch (e: Exception) {
                 Log.e(TAG, "OpenClaw start failed", e)
             }
@@ -670,7 +677,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 onUi {
                     updateSettingsRows()
-                    maybeShowWebUi()
+                    refreshLaunchButton()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Server start failed", e)
@@ -706,11 +713,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun maybeShowWebUi() {
+    private fun refreshLaunchButton() {
         val agent = currentAgent()
-        if (!agent.bundled || agent.webUrl == null) return
-        if (!serverManager.isRunning) return
-        if (agent.id == "openclaw" && !openclawUiStarted) return
+        val canLaunch = agent.bundled && agent.webUrl != null &&
+            serverManager.isRunning &&
+            (agent.id != "openclaw" || openclawUiStarted)
+        launchAgentBtn.visibility = if (canLaunch) View.VISIBLE else View.GONE
+    }
+
+    private fun launchActiveAgent() {
+        val agent = currentAgent()
+        if (!agent.bundled || agent.webUrl == null) {
+            Toast.makeText(this, R.string.home_runtime_hint, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!serverManager.isRunning) {
+            Toast.makeText(this, R.string.status_waiting_server, Toast.LENGTH_SHORT).show()
+            return
+        }
         showAgentWebUi(agent.webUrl)
     }
 
