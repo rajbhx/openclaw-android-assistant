@@ -1,12 +1,14 @@
 package com.codex.mobile
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.TimeUnit
 
 /**
  * Manages the lifecycle of the Node.js codex-web-local server process running
@@ -25,9 +27,18 @@ class CodexServerManager(private val context: Context) {
         const val OPENCLAW_CONTROL_UI_PORT = 19001
     }
 
+    private val stateLock = Any()
+
+    @Volatile
     private var serverProcess: Process? = null
+
+    @Volatile
     private var proxyProcess: Process? = null
+
+    @Volatile
     private var openClawGatewayProcess: Process? = null
+
+    @Volatile
     private var openClawControlUiProcess: Process? = null
 
     val isRunning: Boolean
@@ -40,6 +51,112 @@ class CodexServerManager(private val context: Context) {
                 true
             }
         }
+    // ── Process helpers ────────────────────────────────────────────────────
+
+    /**
+     * Reads a process's combined output on a daemon thread, logging each line
+     * with [tag]. Stream errors (a killed process closing its pipe) are caught
+     * and logged so an uncaught exception can never crash the app. [onExit]
+     * runs once the stream has closed; callers use it to clear state guarded
+     * by a process-identity check.
+     */
+    private fun monitorProcess(proc: Process, tag: String, onExit: (() -> Unit)? = null) {
+        Thread {
+            try {
+                val reader = BufferedReader(InputStreamReader(proc.inputStream))
+                var line = reader.readLine()
+                while (line != null) {
+                    Log.d(TAG, "$tag $line")
+                    line = reader.readLine()
+                }
+            } catch (e: java.io.IOException) {
+                Log.w(TAG, "$tag stream closed while reading: ${e.message}")
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                Log.w(TAG, "$tag monitor interrupted")
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "$tag monitor error: ${e::class.simpleName}: ${e.message}")
+            }
+            try {
+                val code = proc.waitFor()
+                Log.i(TAG, "$tag exited with code: $code")
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                Log.w(TAG, "$tag waitFor interrupted")
+            }
+            onExit?.invoke()
+        }.apply { isDaemon = true }.start()
+    }
+
+    /** Wait up to [timeoutMs] for [proc] to exit. Never throws. */
+    private fun waitForProcess(proc: Process, timeoutMs: Long): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return try {
+                proc.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                false
+            }
+        }
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                proc.exitValue()
+                return true
+            } catch (_: IllegalThreadStateException) {
+                Thread.sleep(50)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+        return false
+    }
+
+    /**
+     * Stop [proc] gracefully, then force-kill after a short timeout so a
+     * stuck child can never block the caller indefinitely.
+     */
+    private fun destroyBounded(proc: Process?, name: String) {
+        if (proc == null) return
+        try {
+            proc.destroy()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error destroying $name: ${e.message}")
+        }
+        if (!waitForProcess(proc, 3000)) {
+            Log.w(TAG, "$name did not exit within 3s - forcing")
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    proc.destroyForcibly()
+                } else {
+                    proc.destroy()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error force-stopping $name: ${e.message}")
+            }
+            waitForProcess(proc, 3000)
+        }
+    }
+
+    /**
+     * Fallback cleanup: kill any process whose cmdline mentions one of the
+     * given ports (stale orphans from a previous app process). Runs inside
+     * the Termux prefix so /proc scanning uses the app's UID namespace.
+     */
+    private fun killByPortScan(vararg ports: Int) {
+        val pattern = ports.joinToString("|")
+        runInPrefix(
+            """
+            for pid in ${'$'}(ls /proc 2>/dev/null | grep '^[0-9]'); do
+                if cat /proc/${'$'}pid/cmdline 2>/dev/null | tr '\0' ' ' | grep -qE "$pattern"; then
+                    kill -9 ${'$'}pid 2>/dev/null
+                fi
+            done
+            true
+            """.trimIndent(),
+        ) { }
+    }
 
     // ── Shell helpers ──────────────────────────────────────────────────────
 
@@ -826,7 +943,11 @@ H3
      * `allowInsecureAuth: true` in openclaw.json, this ensures any
      * device can connect without "device token mismatch" errors.
      */
-    fun startOpenClawGateway(): Boolean {
+    fun startOpenClawGateway(): Boolean = synchronized(stateLock) {
+        startOpenClawGatewayLocked()
+    }
+
+    private fun startOpenClawGatewayLocked(): Boolean {
         if (openClawGatewayProcess != null) {
             try {
                 openClawGatewayProcess!!.exitValue()
@@ -876,15 +997,9 @@ H3
         val proc = pb.start()
         openClawGatewayProcess = proc
 
-        Thread {
-            val reader = BufferedReader(InputStreamReader(proc.inputStream))
-            var line = reader.readLine()
-            while (line != null) {
-                Log.d(TAG, "[openclaw-gw] $line")
-                line = reader.readLine()
-            }
-            Log.i(TAG, "OpenClaw gateway exited with code: ${proc.waitFor()}")
-        }.start()
+        monitorProcess(proc, "[openclaw-gw]") {
+            if (openClawGatewayProcess === proc) openClawGatewayProcess = null
+        }
 
         Thread.sleep(5000)
         Log.i(TAG, "OpenClaw gateway started on port $OPENCLAW_GATEWAY_PORT")
@@ -896,7 +1011,11 @@ H3
      * Control UI on [OPENCLAW_CONTROL_UI_PORT]. The UI assets live inside
      * the installed openclaw npm package at dist/control-ui/.
      */
-    fun startOpenClawControlUiServer(): Boolean {
+    fun startOpenClawControlUiServer(): Boolean = synchronized(stateLock) {
+        startOpenClawControlUiServerLocked()
+    }
+
+    private fun startOpenClawControlUiServerLocked(): Boolean {
         if (openClawControlUiProcess != null) {
             try {
                 openClawControlUiProcess!!.exitValue()
@@ -960,15 +1079,9 @@ H3
         val proc = pb.start()
         openClawControlUiProcess = proc
 
-        Thread {
-            val reader = BufferedReader(InputStreamReader(proc.inputStream))
-            var line = reader.readLine()
-            while (line != null) {
-                Log.d(TAG, "[openclaw-ui] $line")
-                line = reader.readLine()
-            }
-            Log.i(TAG, "OpenClaw Control UI server exited with code: ${proc.waitFor()}")
-        }.start()
+        monitorProcess(proc, "[openclaw-ui]") {
+            if (openClawControlUiProcess === proc) openClawControlUiProcess = null
+        }
 
         Thread.sleep(1000)
         Log.i(TAG, "OpenClaw Control UI server started on port $OPENCLAW_CONTROL_UI_PORT")
@@ -1094,7 +1207,11 @@ WEOF
      * resolve DNS and reach HTTPS endpoints. Node.js uses Android's native
      * resolver; the proxy forwards TCP connections transparently.
      */
-    fun startProxy(): Boolean {
+    fun startProxy(): Boolean = synchronized(stateLock) {
+        startProxyLocked()
+    }
+
+    private fun startProxyLocked(): Boolean {
         if (proxyProcess != null) return true
 
         val paths = BootstrapInstaller.getPaths(context)
@@ -1136,15 +1253,9 @@ WEOF
         val proc = pb.start()
         proxyProcess = proc
 
-        Thread {
-            val reader = BufferedReader(InputStreamReader(proc.inputStream))
-            var line = reader.readLine()
-            while (line != null) {
-                Log.d(TAG, "[proxy] $line")
-                line = reader.readLine()
-            }
-            Log.i(TAG, "Proxy exited with code: ${proc.waitFor()}")
-        }.start()
+        monitorProcess(proc, "[proxy]") {
+            if (proxyProcess === proc) proxyProcess = null
+        }
 
         Thread.sleep(800)
         Log.i(TAG, "CONNECT proxy started on 127.0.0.1:$PROXY_PORT")
@@ -1152,8 +1263,11 @@ WEOF
     }
 
     fun stopProxy() {
-        proxyProcess?.destroy()
-        proxyProcess = null
+        synchronized(stateLock) {
+            val proc = proxyProcess
+            proxyProcess = null
+            destroyBounded(proc, "Proxy")
+        }
     }
 
     // ── Authentication ──────────────────────────────────────────────────────
@@ -1320,7 +1434,11 @@ WEOF
      * Start the codex-web-local server. The CONNECT proxy must be running
      * and authentication must have been completed first.
      */
-    fun startServer(): Boolean {
+    fun startServer(): Boolean = synchronized(stateLock) {
+        startServerLocked()
+    }
+
+    private fun startServerLocked(): Boolean {
         if (isRunning) {
             Log.i(TAG, "Server already running")
             return true
@@ -1351,15 +1469,9 @@ WEOF
         val proc = pb.start()
         serverProcess = proc
 
-        Thread {
-            val reader = BufferedReader(InputStreamReader(proc.inputStream))
-            var line = reader.readLine()
-            while (line != null) {
-                Log.d(TAG, "[server] $line")
-                line = reader.readLine()
-            }
-            Log.i(TAG, "Server process exited with code: ${proc.waitFor()}")
-        }.start()
+        monitorProcess(proc, "[server]") {
+            if (serverProcess === proc) serverProcess = null
+        }
 
         return true
     }
@@ -1418,31 +1530,31 @@ WEOF
     }
 
     fun stopServer() {
-        val proc = serverProcess ?: return
-        serverProcess = null
-
-        try {
-            proc.destroy()
-        } catch (e: Exception) {
-            Log.w(TAG, "Error destroying server process: ${e.message}")
+        synchronized(stateLock) {
+            val proc = serverProcess ?: run {
+                stopOpenClaw()
+                stopProxy()
+                return
+            }
+            serverProcess = null
+            destroyBounded(proc, "Server process")
+            stopOpenClaw()
+            stopProxy()
+            Log.i(TAG, "Server stopped")
         }
-
-        try {
-            proc.waitFor()
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
-
-        stopOpenClaw()
-        stopProxy()
-        Log.i(TAG, "Server stopped")
     }
 
     private fun stopOpenClaw() {
-        openClawGatewayProcess?.destroy()
-        openClawGatewayProcess = null
-        openClawControlUiProcess?.destroy()
-        openClawControlUiProcess = null
+        synchronized(stateLock) {
+            val gateway = openClawGatewayProcess
+            val ui = openClawControlUiProcess
+            openClawGatewayProcess = null
+            openClawControlUiProcess = null
+            destroyBounded(gateway, "OpenClaw gateway")
+            destroyBounded(ui, "OpenClaw Control UI")
+            // Kill any surviving node children that still hold the ports.
+            killByPortScan(OPENCLAW_GATEWAY_PORT, OPENCLAW_CONTROL_UI_PORT)
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

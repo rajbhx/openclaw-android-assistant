@@ -952,9 +952,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleServer() {
         if (serverManager.isRunning) {
-            serverManager.stopServer()
-            updateSettingsRows()
-            hideAgentWebUi()
+            Thread {
+                serverManager.stopServer()
+                onUi {
+                    updateSettingsRows()
+                    hideAgentWebUi()
+                }
+            }.apply { isDaemon = true; start() }
             return
         }
         Thread {
