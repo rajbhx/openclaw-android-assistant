@@ -123,7 +123,7 @@ object BootstrapInstaller {
         val archName = determineArchName()
         val assetName = if (hasPreinstalled) preinstalledAsset else "bootstrap-$archName.zip"
         val termuxPrefix = "/data/data/com.termux/files/usr"
-        val devicePrefix = "/data/user/0/com.codex.mobile/files/usr"
+        val devicePrefix = "/data/user/0/com.codex.mobile.op7/files/usr"
 
         Log.i(TAG, "Extracting $assetName (preinstalled=$hasPreinstalled) to $stagingPath")
 
@@ -232,7 +232,7 @@ object BootstrapInstaller {
     private fun fixTermuxPaths(paths: Paths) {
         val prefix = paths.prefixDir
         val termuxPrefix = "/data/data/com.termux/files/usr"
-        val devicePrefix = "/data/user/0/com.codex.mobile/files/usr"
+        val devicePrefix = "/data/user/0/com.codex.mobile.op7/files/usr"
 
         // Create apt.conf that overrides all directory settings.
         // Use Dir "/" so apt doesn't prepend a prefix to absolute paths.
@@ -268,7 +268,7 @@ object BootstrapInstaller {
             sourcesList.writeText(
                 content
                     .replace("https://", "http://")
-                    .replace("com.termux", "com.codex.mobile")
+                    .replace("com.termux", "com.codex.mobile.op7")
             )
         }
 

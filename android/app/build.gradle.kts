@@ -37,7 +37,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.codex.mobile"
+        applicationId = "com.codex.mobile.op7"
         minSdk = 24
         // targetSdk 28 allows executing binaries from app data directory.
         // Android 10+ (targetSdk 29+) enforces W^X which blocks this via SELinux.

@@ -1,4 +1,4 @@
-#!/data/data/com.codex.mobile/files/usr/bin/sh
+#!/data/data/com.codex.mobile.op7/files/usr/bin/sh
 #
 # First-run setup script for Codex inside the Termux bootstrap environment.
 # Called by the Android app after bootstrap extraction, or can be run manually

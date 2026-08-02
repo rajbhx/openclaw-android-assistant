@@ -12,7 +12,7 @@ Before packaging this script:
      (openclaw.mjs shebang, /tmp & /bin/sh & /usr/bin/env rewrites,
      gateway runner + device-auth patches)
   2. rewrites every hardcoded /data/data/com.termux/files/usr path to the
-     app's real prefix (/data/user/0/com.codex.mobile/files/usr) in all
+     app's real prefix (/data/user/0/com.codex.mobile.op7/files/usr) in all
      text files (bin scripts, node_modules, dpkg metadata, apt config)
   3. resolves symlink chains so SYMLINKS.txt entries are order-independent
 """

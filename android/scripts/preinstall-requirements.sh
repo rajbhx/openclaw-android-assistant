@@ -38,7 +38,7 @@ if [ "${1:-}" = "--arch" ] && [ -n "${2:-}" ]; then
 fi
 
 TERMUX_PREFIX="/data/data/com.termux/files/usr"
-DEVICE_PREFIX="/data/user/0/com.codex.mobile/files/usr"
+DEVICE_PREFIX="/data/user/0/com.codex.mobile.op7/files/usr"
 
 BOOTSTRAP_VERSION="bootstrap-2026.02.12-r1+apt.android-7"
 BOOTSTRAP_URL="https://github.com/termux/termux-packages/releases/download/${BOOTSTRAP_VERSION}/bootstrap-${ARCH}.zip"

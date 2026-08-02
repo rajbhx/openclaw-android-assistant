@@ -18,7 +18,7 @@ Android APK that embeds a Termux-style Linux bootstrap environment, installs Ope
 │         │                  │            │
 │         ▼                  ▼            │
 │  ┌──────────────────────────────────┐   │
-│  │    /data/data/com.codex.mobile/  │   │
+│  │    /data/data/com.codex.mobile.op7/  │   │
 │  │    files/usr/  (Termux prefix)   │   │
 │  │                                  │   │
 │  │    ├── bin/node                   │   │
