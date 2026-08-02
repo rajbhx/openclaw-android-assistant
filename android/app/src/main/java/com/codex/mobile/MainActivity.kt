@@ -490,7 +490,7 @@ class MainActivity : AppCompatActivity() {
         )
         Thread {
             try {
-                runEnvironmentSetup()
+                val finalDetail = runEnvironmentSetup()
                 onUi {
                     setupRunning = false
                     prefs.edit().putBoolean(KEY_SETUP_DONE, true).apply()
@@ -499,10 +499,10 @@ class MainActivity : AppCompatActivity() {
                         settingUp = false,
                         ok = true,
                         title = getString(R.string.home_status_ready),
-                        detail = getString(R.string.home_status_detail_ready),
+                        detail = finalDetail ?: getString(R.string.home_status_detail_ready),
                     )
                     maybeAskOpenClaw()
-                    refreshLaunchButton()
+                    refreshAgentButtons()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Environment setup failed", e)
@@ -519,7 +519,7 @@ class MainActivity : AppCompatActivity() {
         }.apply { isDaemon = true; start() }
     }
 
-    private fun runEnvironmentSetup() {
+    private fun runEnvironmentSetup(): String? {
         // Step 1: Extract bootstrap
         if (!BootstrapInstaller.isBootstrapInstalled(this)) {
             updateStatus(getString(R.string.status_extracting_bootstrap))
@@ -588,9 +588,13 @@ class MainActivity : AppCompatActivity() {
             throw RuntimeException("Failed to start network proxy")
         }
 
-        // Step 5: Authenticate via `codex login`
+        // Step 5: Authenticate via `codex login`. This NEVER blocks setup:
+        // if the browser login or API key entry is skipped, the environment
+        // is still marked ready and the user can finish login later from
+        // Settings → Login.
         updateStatus("Checking authentication…")
-        if (!serverManager.isLoggedIn()) {
+        var authenticated = serverManager.isLoggedIn()
+        if (!authenticated) {
             updateStatus("Login required — opening browser…")
             val authOk = serverManager.loginWithUrl(
                 onLoginUrl = { url ->
@@ -601,24 +605,40 @@ class MainActivity : AppCompatActivity() {
                 onProgress = { msg -> updateDetail(msg) },
             )
             if (!authOk && !serverManager.isLoggedIn()) {
-                updateStatus("Browser login failed — enter API key manually")
+                updateStatus("Browser login didn't finish — enter API key manually")
                 val apiKey = requestApiKey()
                 if (apiKey.isBlank()) {
-                    throw RuntimeException("No API key provided")
+                    updateStatus("Login skipped — do it later from Settings → Login")
+                } else {
+                    authenticated = serverManager.loginWithApiKey(apiKey)
                 }
-                if (!serverManager.loginWithApiKey(apiKey)) {
-                    throw RuntimeException("Login failed — check your API key")
-                }
+            } else {
+                authenticated = true
             }
         }
-        updateStatus("Authenticated")
 
-        // Step 6: Health check
-        updateStatus("Verifying API access…", "Sending test message")
-        if (!serverManager.healthCheck { msg -> updateDetail(msg) }) {
-            throw RuntimeException("API health check failed — Codex could not reach OpenAI")
+        var finalDetail: String? = null
+        if (authenticated) {
+            updateStatus("Authenticated")
+            // Step 6: Health check (non-fatal — reports, never fails setup)
+            updateStatus("Verifying API access…", "Sending test message")
+            if (!serverManager.healthCheck { msg -> updateDetail(msg) }) {
+                Log.w(TAG, "API health check failed — environment still marked ready")
+                finalDetail = getString(R.string.home_status_api_pending)
+                updateStatus(
+                    "API check failed",
+                    getString(R.string.home_status_api_pending),
+                )
+            } else {
+                updateStatus("API verified")
+            }
+        } else {
+            finalDetail = getString(R.string.home_status_login_pending)
+            updateStatus(
+                "Login pending",
+                getString(R.string.home_status_login_pending),
+            )
         }
-        updateStatus("API verified")
 
         // Step 7: Start web server
         updateStatus("Starting server…")
@@ -632,6 +652,7 @@ class MainActivity : AppCompatActivity() {
             throw RuntimeException("Server did not start in time")
         }
         updateStatus("Server ready")
+        return finalDetail
     }
 
     /**

@@ -1212,6 +1212,7 @@ WEOF
     fun loginWithUrl(
         onLoginUrl: (url: String) -> Unit,
         onProgress: (String) -> Unit,
+        timeoutMs: Long = 180_000,
     ): Boolean {
         val paths = BootstrapInstaller.getPaths(context)
         val env = buildEnvironment(paths).toMutableMap()
@@ -1230,6 +1231,8 @@ WEOF
         val urlRegex = Regex("""(https://auth\.openai\.com/\S+)""")
         var urlSent = false
 
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var timedOut = false
         var line = reader.readLine()
         while (line != null) {
             val clean = line.replace(Regex("\\x1b\\[[0-9;]*m"), "").trim()
@@ -1243,11 +1246,23 @@ WEOF
                 }
             }
 
+            if (System.currentTimeMillis() > deadline) {
+                Log.w(TAG, "codex login timed out after ${timeoutMs}ms")
+                timedOut = true
+                proc.destroy()
+                break
+            }
+
             line = reader.readLine()
         }
 
-        val exitCode = proc.waitFor()
-        Log.i(TAG, "codex login exited with code $exitCode")
+        val exitCode = try {
+            proc.waitFor()
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            -1
+        }
+        Log.i(TAG, "codex login exited with code $exitCode (timeout=$timedOut)")
         return exitCode == 0
     }
 

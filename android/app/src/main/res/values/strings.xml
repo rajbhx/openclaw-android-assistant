@@ -12,6 +12,8 @@
     <string name="home_status_ready">Environment ready</string>
     <string name="home_status_detail_ready">Everything is running smoothly</string>
     <string name="home_status_needs_repair">Needs repair</string>
+    <string name="home_status_login_pending">Environment ready — log in from Settings → Login to use agents</string>
+    <string name="home_status_api_pending">Environment ready — API check failed (see Settings → Login / network)</string>
     <string name="home_status_background_hint">Setup runs in the background — browse menus freely</string>
     <string name="home_repair_now">Repair now</string>
     <string name="home_active_agent_label">ACTIVE AGENT</string>
