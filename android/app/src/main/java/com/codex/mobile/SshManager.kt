@@ -248,6 +248,86 @@ class SshManager(private val context: Context) {
     }
 
     /**
+     * Make the preinstalled OpenSSH sshd usable. Termux's openssh deb ships
+     * no sshd_config, host keys, or privsep dir — its postinst generates them
+     * and dpkg-deb -x skips postinst. This writes a config with app-real
+     * paths, generates an ed25519 host key, and verifies with `sshd -t`. If
+     * the plain binary cannot resolve its baked /data/data/com.termux/...
+     * paths, a proot wrapper is installed so `sshd` works from the terminal.
+     */
+    fun ensureSshdReady(onProgress: (String) -> Unit): Boolean {
+        val paths = BootstrapInstaller.getPaths(context)
+        val prefix = paths.prefixDir
+        val sshdBin = File(prefix, "bin/sshd")
+        if (!sshdBin.exists()) return true // openssh absent; dropbear is the fallback
+
+        val sshDir = File(prefix, "etc/ssh")
+        sshDir.mkdirs()
+        File(sshDir, "ssh_config.d").mkdirs()
+        File(sshDir, "sshd_config.d").mkdirs()
+        File(prefix, "var/empty").mkdirs()
+        File(prefix, "var/run").mkdirs()
+
+        val configFile = File(sshDir, "sshd_config")
+        if (!configFile.exists()) {
+            configFile.writeText(
+                """
+                Port 8022
+                ListenAddress 0.0.0.0
+                HostKey ${prefix}/etc/ssh/ssh_host_ed25519_key
+                PidFile ${prefix}/var/run/sshd.pid
+                PermitRootLogin yes
+                PasswordAuthentication yes
+                PubkeyAuthentication yes
+                AuthorizedKeysFile ${paths.homeDir}/.ssh/authorized_keys
+                UsePAM no
+                X11Forwarding no
+                AllowTcpForwarding yes
+                Subsystem sftp ${prefix}/lib/ssh/sftp-server
+                """.trimIndent() + "\n",
+            )
+            configFile.setReadable(true, true)
+            onProgress("Wrote sshd_config")
+        }
+
+        val hostKey = File(sshDir, "ssh_host_ed25519_key")
+        if (!hostKey.exists()) {
+            val code = serverManager.runInPrefix(
+                "ssh-keygen -N '' -t ed25519 -f ${hostKey.absolutePath} 2>&1 && chmod 600 ${hostKey.absolutePath}"
+            )
+            if (code == 0 && hostKey.exists()) {
+                onProgress("Generated sshd host key")
+            } else {
+                onProgress("Failed to generate sshd host key - sshd may not start")
+            }
+        }
+
+        val testCode = serverManager.runInPrefix("sshd -t 2>&1")
+        if (testCode == 0) return true
+
+        // The plain binary can't resolve its baked paths - wrap it in proot.
+        onProgress("sshd -t failed (code $testCode) - installing proot wrapper")
+        val real = File(prefix, "bin/sshd.real")
+        if (!real.exists() && !sshdBin.renameTo(real)) {
+            onProgress("Failed to rename sshd for wrapper")
+            return false
+        }
+        sshdBin.writeText(
+            """
+            #!${prefix}/bin/sh
+            unset LD_PRELOAD
+            exec ${prefix}/bin/proot -b ${paths.filesDir}:/data/data/com.termux/files -w ${paths.homeDir} ${prefix}/bin/sshd.real "${'$'}@"
+            """.trimIndent() + "\n",
+        )
+        sshdBin.setExecutable(true, true)
+        val wrappedTest = serverManager.runInPrefix("sshd -t 2>&1")
+        onProgress(
+            if (wrappedTest == 0) "sshd ready (proot wrapper)" else "sshd -t still failing (code $wrappedTest)"
+        )
+        return wrappedTest == 0
+    }
+
+    /**
      * Stop the SSH server: kill dropbear (via its pidfile), then proot.
      */
     fun stop() {

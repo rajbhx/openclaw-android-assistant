@@ -582,6 +582,15 @@ class MainActivity : AppCompatActivity() {
         serverManager.ensureFullAccessConfig()
         serverManager.ensureDefaultWorkspace()
 
+        // Step 3d: Make the preinstalled openssh sshd usable (config, host
+        // key, privsep dir, proot wrapper if needed). Best effort - setup
+        // must never fail because of it.
+        runCatching {
+            sshManager.ensureSshdReady { msg -> updateDetail(msg) }
+        }.onFailure { e ->
+            Log.w(TAG, "ensureSshdReady failed: ${e.message}")
+        }
+
         // Step 4: CONNECT proxy (needed for native binary DNS/TLS)
         updateStatus("Starting network proxy…")
         if (!serverManager.startProxy()) {

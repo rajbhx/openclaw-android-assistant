@@ -224,6 +224,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3b. OpenSSH config + privsep dir. The openssh deb ships no sshd_config,
+#     ssh_config, or var/empty - termux generates them in postinst, which
+#     dpkg-deb -x skips - so create them here. Paths use the Termux prefix;
+#     package-prefix.py rewrites them to the app's real prefix afterwards.
+# ---------------------------------------------------------------------------
+log "Generating OpenSSH sshd_config/ssh_config..."
+mkdir -p "$STAGE_PREFIX/etc/ssh/ssh_config.d" "$STAGE_PREFIX/etc/ssh/sshd_config.d" \
+         "$STAGE_PREFIX/var/empty" "$STAGE_PREFIX/var/run"
+cat > "$STAGE_PREFIX/etc/ssh/sshd_config" <<SSHDCONF
+Port 8022
+ListenAddress 0.0.0.0
+HostKey $TERMUX_PREFIX/etc/ssh/ssh_host_ed25519_key
+PidFile $TERMUX_PREFIX/var/run/sshd.pid
+PermitRootLogin yes
+PasswordAuthentication yes
+PubkeyAuthentication yes
+UsePAM no
+X11Forwarding no
+AllowTcpForwarding yes
+Subsystem sftp $TERMUX_PREFIX/lib/ssh/sftp-server
+SSHDCONF
+chmod 600 "$STAGE_PREFIX/etc/ssh/sshd_config"
+
+cat > "$STAGE_PREFIX/etc/ssh/ssh_config" <<SSHCONF
+Host *
+    Port 8022
+    StrictHostKeyChecking no
+    UserKnownHostsFile $TERMUX_PREFIX/tmp/known_hosts
+SSHCONF
+chmod 600 "$STAGE_PREFIX/etc/ssh/ssh_config"
+echo "OpenSSH config ready"
+
+# ---------------------------------------------------------------------------
 # 4. npm installs (host node, --prefix into the staging prefix)
 # ---------------------------------------------------------------------------
 NPM_BIN="$(command -v npm)" || die "npm not found — Node.js is required on the CI runner"
