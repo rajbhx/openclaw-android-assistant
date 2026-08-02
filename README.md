@@ -262,6 +262,14 @@ Linux environment from a computer and fix things without touching the app UI
 - Optional: add your own public keys to `~/.ssh/authorized_keys` inside the
   app's home dir for key-based logins.
 
+> ⚠️ **Security note:** this is a **developer/debugging feature**, not an
+> end-user feature. While started, port `8022` is exposed on your LAN, there
+> is no rate limiting or lockout on password attempts, and the shell has full
+> access to the app sandbox (API keys, logs, environment). Keep it stopped
+> when you don't need it, use a strong password, and only connect on trusted
+> networks. The preinstalled OpenSSH `sshd` (run `sshd` in the Terminal) is an
+> alternative to Dropbear and shares port `8022` — don't run both at once.
+
 ---
 
 ## 🎯 Requirements
