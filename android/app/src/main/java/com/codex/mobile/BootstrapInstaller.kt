@@ -3,6 +3,7 @@ package com.codex.mobile
 import android.content.Context
 import android.os.Build
 import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import java.io.BufferedReader
 import java.io.File
@@ -47,6 +48,46 @@ object BootstrapInstaller {
     }
 
     /**
+     * Deeper health check used by the Repair action: the shell, Node.js,
+     * the Codex JS launcher and the native Codex binary must all exist.
+     * On bundled (preinstalled) builds every one of these is inside the
+     * APK, so repair is fully offline.
+     */
+    fun isBootstrapHealthy(context: Context): Boolean {
+        val paths = getPaths(context)
+        if (!File(paths.prefixDir, "bin/sh").exists()) return false
+        if (!File(paths.prefixDir, "bin/node").exists()) return false
+        if (!File(paths.prefixDir, "lib/node_modules/@openai/codex/bin/codex.js").exists()) {
+            return false
+        }
+        val nativeCodex = File(
+            paths.prefixDir,
+            "lib/node_modules/@openai/codex-linux-arm64" +
+                "/vendor/aarch64-unknown-linux-musl/codex/codex",
+        )
+        return nativeCodex.exists()
+    }
+
+    /**
+     * Wipe the prefix and re-extract everything from the APK assets.
+     * With the preinstalled prefix this restores the full runtime offline;
+     * otherwise the plain bootstrap is extracted and the app re-runs its
+     * (network) fallback installs.
+     */
+    fun reinstall(
+        context: Context,
+        onProgress: (String) -> Unit = {},
+    ) {
+        val paths = getPaths(context)
+        val prefixFile = File(paths.prefixDir)
+        onProgress("Removing broken environment…")
+        if (prefixFile.exists()) {
+            deleteRecursive(prefixFile)
+        }
+        install(context, onProgress)
+    }
+
+    /**
      * Extract bootstrap-aarch64.zip from assets into the prefix directory.
      * This is idempotent: if the prefix already exists, it returns immediately.
      */
@@ -71,11 +112,20 @@ object BootstrapInstaller {
             deleteRecursive(stagingFile)
         }
 
+        // Prefer the preinstalled prefix (everything baked into the APK).
+        // Fall back to the plain bootstrap archive only if the preinstalled
+        // asset is missing (e.g. a manually-built debug APK).
+        val preinstalledAsset = "preinstalled-prefix.zip"
+        val hasPreinstalled = runCatching {
+            context.assets.open(preinstalledAsset).use { }
+            true
+        }.getOrDefault(false)
         val archName = determineArchName()
-        val assetName = "bootstrap-$archName.zip"
+        val assetName = if (hasPreinstalled) preinstalledAsset else "bootstrap-$archName.zip"
         val termuxPrefix = "/data/data/com.termux/files/usr"
+        val devicePrefix = "/data/user/0/com.codex.mobile/files/usr"
 
-        Log.i(TAG, "Extracting $assetName to $stagingPath")
+        Log.i(TAG, "Extracting $assetName (preinstalled=$hasPreinstalled) to $stagingPath")
 
         val buffer = ByteArray(8192)
         val symlinks = mutableListOf<Pair<String, String>>()
@@ -94,6 +144,9 @@ object BootstrapInstaller {
                                 // Remap absolute Termux paths to our actual prefix
                                 if (target.startsWith(termuxPrefix)) {
                                     target = target.replace(termuxPrefix, paths.prefixDir)
+                                }
+                                if (target.startsWith(devicePrefix)) {
+                                    target = target.replace(devicePrefix, paths.prefixDir)
                                 }
                                 val linkPath = "$stagingPath/${parts[1]}"
                                 symlinks.add(target to linkPath)
@@ -163,6 +216,11 @@ object BootstrapInstaller {
         onProgress("Configuring package manager…")
         fixTermuxPaths(paths)
 
+        // Zip extraction never preserves file modes; make sure every
+        // executable (npm bin targets, native Codex binary, scripts, .so)
+        // is runnable after extraction.
+        finalizeExecutablePermissions(paths)
+
         Log.i(TAG, "Bootstrap installed successfully at ${paths.prefixDir}")
     }
 
@@ -174,6 +232,7 @@ object BootstrapInstaller {
     private fun fixTermuxPaths(paths: Paths) {
         val prefix = paths.prefixDir
         val termuxPrefix = "/data/data/com.termux/files/usr"
+        val devicePrefix = "/data/user/0/com.codex.mobile/files/usr"
 
         // Create apt.conf that overrides all directory settings.
         // Use Dir "/" so apt doesn't prepend a prefix to absolute paths.
@@ -217,7 +276,9 @@ object BootstrapInstaller {
         val dpkgStatus = File(prefix, "var/lib/dpkg/status")
         if (dpkgStatus.exists()) {
             val content = dpkgStatus.readText()
-            dpkgStatus.writeText(content.replace(termuxPrefix, prefix))
+            dpkgStatus.writeText(
+                content.replace(termuxPrefix, prefix).replace(devicePrefix, prefix)
+            )
         }
 
         // Ensure dpkg directories exist
@@ -234,8 +295,10 @@ object BootstrapInstaller {
                 if (file.name.endsWith(".list")) {
                     try {
                         val text = file.readText()
-                        if (text.contains(termuxPrefix)) {
-                            file.writeText(text.replace(termuxPrefix, prefix))
+                        if (text.contains(termuxPrefix) || text.contains(devicePrefix)) {
+                            file.writeText(
+                                text.replace(termuxPrefix, prefix).replace(devicePrefix, prefix)
+                            )
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to fix ${file.name}: ${e.message}")
@@ -245,6 +308,69 @@ object BootstrapInstaller {
         }
 
         Log.i(TAG, "Fixed Termux paths -> $prefix")
+    }
+
+    /**
+     * Walk the extracted prefix and make sure every executable is marked
+     * 0700. Zip extraction never preserves file modes, and the preinstalled
+     * prefix contains executables the bootstrap naming rules don't cover
+     * (npm bin targets, the native Codex binary, koffi modules, scripts).
+     */
+    private fun finalizeExecutablePermissions(paths: Paths) {
+        val root = File(paths.prefixDir)
+        val visited = HashSet<String>()
+        val knownExecNames = setOf("codex", "rg", "node", "python", "python3", "pip", "pip3")
+
+        fun walk(dir: File) {
+            if (!visited.add(dir.absolutePath)) return
+            val children = dir.listFiles() ?: return
+            for (child in children) {
+                val isLink = try {
+                    OsConstants.S_ISLNK(Os.lstat(child.absolutePath).st_mode)
+                } catch (e: Exception) {
+                    false
+                }
+                if (isLink) continue
+                if (child.isDirectory) {
+                    walk(child)
+                    continue
+                }
+
+                val rel = child.absolutePath.removePrefix(paths.prefixDir + "/")
+                val underExecDir = rel.startsWith("bin/") ||
+                    rel.startsWith("libexec/") ||
+                    rel.startsWith("lib/apt/methods/") ||
+                    rel.startsWith("lib/bash/") ||
+                    rel.contains("/bin/")
+                val isLib = rel.endsWith(".so") || rel.endsWith(".node")
+                val isKnown = child.name in knownExecNames
+                val isScript = child.length() in 2..(64 * 1024) && hasShebang(child)
+
+                if (underExecDir || isLib || isKnown || isScript) {
+                    try {
+                        Os.chmod(child.absolutePath, 0b111_000_000)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "chmod failed for ${child.absolutePath}: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        walk(root)
+        Log.i(TAG, "Executable permissions finalized")
+    }
+
+    private fun hasShebang(file: File): Boolean {
+        return try {
+            java.io.RandomAccessFile(file, "r").use { raf ->
+                if (raf.length() < 2) {
+                    return@use false
+                }
+                raf.read() == '#'.code && raf.read() == '!'.code
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun shouldBeExecutable(entryName: String): Boolean {

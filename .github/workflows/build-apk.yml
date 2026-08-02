@@ -1,7 +1,20 @@
 name: Build APK
 
+# Automatic build for the OnePlus 7 (Android 10 / OxygenOS 10):
+# - Every push/merge to `main` rebuilds the APK and uploads it as an artifact.
+# - Manual runs can also publish a GitHub release, but only when
+#   `create_release` is set to true (never automatic).
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create a GitHub release with the APK"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -9,6 +22,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
 
     steps:
       - name: Checkout repository
@@ -16,51 +30,103 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "21"
-          cache: "npm"
-
-      - name: Install npm dependencies
-        run: npm ci --ignore-scripts || npm install
-
-      - name: Build Vue frontend
-        run: npm run build:frontend
-
-      - name: Build CLI server
-        run: npm run build:cli
-
-      - name: Bundle server into APK assets
-        run: bash android/scripts/build-server-bundle.sh
-
-      - name: Download Termux bootstrap
-        run: bash android/scripts/download-bootstrap.sh
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: "temurin"
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/anyclaw.apk
+      # Enforces Android 10 / OxygenOS 10 compatibility every build:
+      # hardware acceleration, legacy external storage, targetSdk 28 (W^X
+      # workaround for executing binaries), and Gradle build acceleration.
+      - name: Auto-fix Android 10 / OxygenOS 10 compatibility
+        run: bash android/scripts/android10-compat-fix.sh
+
+      - name: Download Termux bootstrap
+        run: bash android/scripts/download-bootstrap.sh
+
+      # Preinstalled requirements: bakes Node.js, Python, proot, OpenClaw
+      # and the Codex CLI (JS + native binary) into the APK. First launch
+      # extracts everything from the APK — zero downloads on the device.
+      # Note: GitHub-hosted runners have no KVM, so no emulator acceleration
+      # in CI; the app-level hardwareAccelerated flag enables GPU rendering
+      # on the device itself.
+      - name: Build preinstalled requirements (all packages inside the APK)
+        run: bash android/scripts/preinstall-requirements.sh
+
+      - name: Configure stable APK signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/anyclaw-release.p12
+            {
+              echo "keystoreFile=anyclaw-release.p12"
+              echo "keystorePassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PASSWORD"
+            } > android/signing.properties
+            echo "::notice::APK signed with the stable AnyClaw release key (same signature every build)"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 secret not set - APK will use a fresh debug key each build"
+          fi
+
+      - name: Check code (Android lint)
+        working-directory: android
+        run: ./gradlew :app:lintDebug
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: android/app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+
+      - name: Build APK (signed release when secrets are configured)
+        working-directory: android
+        run: |
+          if [ -f signing.properties ]; then
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
+
+      - name: Rename APK + print checksum
+        run: |
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            APK=android/app/build/outputs/apk/release/app-release.apk
+          else
+            APK=android/app/build/outputs/apk/debug/app-debug.apk
+          fi
+          DEST=android/app/build/outputs/anyclaw.apk
+          cp "$APK" "$DEST"
+          echo "APK=$DEST" >> "$GITHUB_ENV"
+          echo "--- sha256sum (check manually) ---"
+          sha256sum "$DEST"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: anyclaw
-          path: android/app/build/outputs/apk/debug/anyclaw.apk
+          path: android/app/build/outputs/anyclaw.apk
 
       - name: Generate changelog
-        if: github.ref_type == 'branch'
+        if: github.event_name == 'workflow_dispatch' && inputs.create_release == true
         id: changelog
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | head -1)
@@ -76,15 +142,20 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
-        if: github.ref_type == 'branch'
+        if: github.event_name == 'workflow_dispatch' && inputs.create_release == true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          name: "AnyClaw v${{ github.run_number }} (${{ github.ref_name }})"
+          name: "AnyClaw v${{ github.run_number }} (OnePlus 7 / Android 10)"
           body: |
             🦞 **AnyClaw** — OpenClaw + Codex on Android
 
-            📱 Install the APK on any ARM64 Android 7.0+ device. No root required.
+            📱 Optimized for OnePlus 7 (8 GB RAM, Android 10 / OxygenOS 10).
+            Native menu UI with liquid-glass design, offline bundled runtime,
+            Repair option, optional OpenClaw agents. The agent UI (WebView)
+            appears only after the selected agent's server has started.
+            Signed with the stable AnyClaw key — installs over previous
+            AnyClaw builds.
 
             ### Changes
             ${{ steps.changelog.outputs.notes }}
@@ -92,6 +163,6 @@ jobs:
             ---
             Branch: ${{ github.ref_name }}
             Built from commit ${{ github.sha }}
-          files: android/app/build/outputs/apk/debug/anyclaw.apk
+          files: android/app/build/outputs/anyclaw.apk
           draft: false
           prerelease: false
