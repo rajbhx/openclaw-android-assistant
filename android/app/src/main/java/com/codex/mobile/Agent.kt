@@ -50,7 +50,9 @@ object AgentCatalog {
             colorRes = R.color.agent_opencode,
             bundled = false,
             webUrl = null,
-            installCommand = "npm install -g --os=linux --cpu=arm64 --libc=musl opencode-ai || npm install -g opencode-linux-arm64-musl",
+            installCommand = """
+                rm -rf "${'$'}PREFIX/lib/node_modules/opencode-ai" "${'$'}PREFIX/bin/opencode"; mkdir -p "${'$'}PREFIX/tmp/_oc" && cd "${'$'}PREFIX/tmp/_oc" && node -e 'const https=require("https"),fs=require("fs");https.get("https://registry.npmjs.org/opencode-linux-arm64-musl/latest",r=>{let b="";r.on("data",c=>b+=c);r.on("end",()=>{const u=JSON.parse(b).dist.tarball,f=fs.createWriteStream("oc.tgz"),dl=x=>https.get(x,res=>{if(res.statusCode>=300&&res.statusCode<400&&res.headers.location)return dl(res.headers.location);res.pipe(f).on("finish",()=>{f.close();console.log("downloaded "+u);process.exit(0)})}).on("error",e=>{console.error(e.message);process.exit(1)});dl(u)})}).on("error",e=>{console.error(e.message);process.exit(1)})' && tar xzf oc.tgz && (cp package/bin/opencode "${'$'}PREFIX/bin/opencode" 2>/dev/null || cp package/opencode "${'$'}PREFIX/bin/opencode" 2>/dev/null) && chmod 700 "${'$'}PREFIX/bin/opencode" && rm -rf "${'$'}PREFIX/tmp/_oc" && "${'$'}PREFIX/bin/opencode" --version
+            """.trimIndent(),
         ),
         Agent(
             id = "hermes",
