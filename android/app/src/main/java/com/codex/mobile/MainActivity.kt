@@ -702,9 +702,38 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.repair_confirm_title)
             .setMessage(R.string.repair_confirm_message)
             .setPositiveButton(R.string.repair_confirm_yes) { _, _ ->
-                prefs.edit().putBoolean(KEY_SETUP_DONE, false).apply()
                 hideAgentWebUi()
-                startSetup()
+                Thread {
+                    try {
+                        updateStatus(getString(R.string.status_repairing), "Stopping servers")
+                        serverManager.stopServer()
+
+                        // Wipe the prefix and re-extract it from the APK assets.
+                        // This is what actually repairs corrupted/missing files —
+                        // re-running setup alone leaves broken files in place.
+                        BootstrapInstaller.reinstall(this) { msg -> updateDetail(msg) }
+                        if (!BootstrapInstaller.isBootstrapHealthy(this)) {
+                            Log.w(
+                                TAG,
+                                "Bootstrap still incomplete after reinstall — setup fallbacks will finish it"
+                            )
+                        }
+                        onUi {
+                            prefs.edit().putBoolean(KEY_SETUP_DONE, false).apply()
+                            startSetup()
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Environment repair failed", e)
+                        onUi {
+                            setStatusUi(
+                                settingUp = false,
+                                ok = false,
+                                title = getString(R.string.home_status_needs_repair),
+                                detail = e.message ?: getString(R.string.error_bootstrap),
+                            )
+                        }
+                    }
+                }.apply { isDaemon = true; start() }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()

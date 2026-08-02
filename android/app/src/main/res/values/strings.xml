@@ -8,6 +8,7 @@
     <string name="home_environment_label">ENVIRONMENT</string>
     <string name="home_status_setting_up">Setting up environment…</string>
     <string name="home_status_detail_setting_up">Preparing runtime for your device</string>
+    <string name="status_repairing">Repairing environment…</string>
     <string name="home_status_ready">Environment ready</string>
     <string name="home_status_detail_ready">Everything is running smoothly</string>
     <string name="home_status_needs_repair">Needs repair</string>
