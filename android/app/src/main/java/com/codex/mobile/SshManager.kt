@@ -148,9 +148,39 @@ class SshManager(private val context: Context) {
             "-D", "${paths.homeDir}/.ssh",
         )
 
+        // dropbear (and its login shell) have Termux paths baked in; proot
+        // bind-maps the app files dir onto them. termux-exec's LD_PRELOAD must
+        // NOT be inherited by the proot subprocess — proot reports
+        // "termux-exec is active ... please unset LD_PRELOAD" and fails to
+        // exec the traced child when it is set.
+        val prootEnv = serverManager.shellEnvironment()
+            .filterKeys { it != "LD_PRELOAD" }
+
+        // Clear leftover proot scratch dirs from failed runs (proot leaves
+        // them behind when a traced child fails to exec).
+        File(paths.tmpDir).listFiles()?.forEach {
+            if (it.isDirectory && it.name.startsWith("proot-")) {
+                it.deleteRecursively()
+            }
+        }
+
+        // Kill any stale dropbear/proot from a previous app run so the port
+        // is free and the pidfile is fresh before we start.
+        serverManager.runInPrefix(
+            """
+            [ -f $prefix/var/run/dropbear.pid ] && kill -9 ${'$'}(cat $prefix/var/run/dropbear.pid 2>/dev/null) 2>/dev/null
+            for pid in ${'$'}(ls /proc 2>/dev/null | grep '^[0-9]'); do
+                if cat /proc/${'$'}pid/cmdline 2>/dev/null | tr '\0' ' ' | grep -q "$SSH_PORT"; then
+                    kill -9 ${'$'}pid 2>/dev/null
+                fi
+            done
+            true
+            """.trimIndent(),
+        ) { Log.d(TAG, "[ssh] $it") }
+
         val pb = ProcessBuilder(command)
         pb.environment().clear()
-        pb.environment().putAll(serverManager.shellEnvironment())
+        pb.environment().putAll(prootEnv)
         pb.directory(File(paths.homeDir))
         pb.redirectErrorStream(true)
 
