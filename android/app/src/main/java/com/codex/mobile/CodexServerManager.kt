@@ -1349,9 +1349,13 @@ WEOF
         return true
     }
 
-    fun waitForServer(timeoutMs: Long = 60_000): Boolean {
+    fun waitForServer(timeoutMs: Long = 60_000): Boolean =
+        waitForPort(SERVER_PORT, timeoutMs)
+
+    /** Polls [port] until it answers with a 2xx/3xx HTTP status or the timeout elapses. */
+    fun waitForPort(port: Int, timeoutMs: Long = 60_000): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
-        val url = URL("http://127.0.0.1:$SERVER_PORT/")
+        val url = URL("http://127.0.0.1:$port/")
 
         while (System.currentTimeMillis() < deadline) {
             try {
@@ -1362,7 +1366,7 @@ WEOF
                 val code = conn.responseCode
                 conn.disconnect()
                 if (code in 200..399) {
-                    Log.i(TAG, "Server is ready (HTTP $code)")
+                    Log.i(TAG, "Server on port $port is ready (HTTP $code)")
                     return true
                 }
             } catch (_: Exception) {
@@ -1371,7 +1375,7 @@ WEOF
             Thread.sleep(500)
         }
 
-        Log.e(TAG, "Server did not become ready within ${timeoutMs}ms")
+        Log.e(TAG, "Server on port $port did not become ready within ${timeoutMs}ms")
         return false
     }
 
@@ -1453,6 +1457,16 @@ WEOF
         }
         configFile.writeText(desired)
         Log.i(TAG, "Wrote full-access config to $configFile")
+    }
+
+    /** Environment map used by the native terminal shell (PTY session). */
+    fun shellEnvironment(): Map<String, String> =
+        buildEnvironment(BootstrapInstaller.getPaths(context))
+
+    /** True when the bundled Termux-style shell binary exists in the prefix. */
+    fun isShellInstalled(): Boolean {
+        val paths = BootstrapInstaller.getPaths(context)
+        return File(paths.prefixDir, "bin/sh").exists()
     }
 
     private fun buildEnvironment(

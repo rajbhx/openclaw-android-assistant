@@ -21,6 +21,9 @@
     <string name="home_build_tag">v%1$s · OnePlus 7 build</string>
     <string name="build_welcome_title">AnyClaw OP7</string>
     <string name="build_welcome_message">This is build v%1$s, signed with the stable OnePlus 7 key. If your launcher shows a different icon or name, you are opening an older AnyClaw — uninstall it first, then install this APK.</string>
+    <string name="home_terminal_card_title">Terminal</string>
+    <string name="home_terminal_card_subtitle">Manual shell for fixing</string>
+
     <string name="home_repair_card_title">Repair environment</string>
     <string name="home_repair_card_subtitle">Fix &amp; reinstall missing packages</string>
 
@@ -31,6 +34,21 @@
     <string name="agents_chip_ready">Ready</string>
     <string name="agents_chip_soon">Coming soon</string>
     <string name="agents_now_using">Now using %1$s</string>
+    <string name="agents_run">Run</string>
+    <string name="agents_install">Install</string>
+    <string name="agents_wait_setup">Environment is still setting up — wait for it to finish, then Run again</string>
+    <string name="agents_openclaw_not_installed">OpenClaw is not installed yet. Choose Install in the dialog to add it.</string>
+
+    <!-- Install guides for agents that are not bundled in this build yet -->
+    <string name="guide_coming_soon">This agent's runtime is not bundled in this build yet. A guide will be added when it is available.</string>
+    <string name="guide_opencode">OpenCode (SST)\n\nInstall the runtime (Termux/proot):\nnpm install -g opencode-ai\n\nGuide: https://opencode.ai/docs\n\nOnce installed, the app will be able to launch it as the active agent.</string>
+    <string name="guide_hermes">Hermes (Nous Research)\n\nThe Hermes agent runtime is not available for Android yet. It will be bundled in a future build.\n\nTrack: https://nousresearch.com/hermes</string>
+    <string name="guide_claude">Claude Code (Anthropic)\n\nInstall the runtime (Termux/proot):\nnpm install -g @anthropic-ai/claude-code\n\nRequires an Anthropic account and login:\nclaude login\n\nGuide: https://docs.anthropic.com/claude-code</string>
+    <string name="guide_gemini">Gemini CLI (Google)\n\nInstall the runtime (Termux/proot):\nnpm install -g @google/gemini-cli\n\nRequires a Google account; login with:\ngemini login\n\nGuide: https://github.com/google-gemini/gemini-cli</string>
+    <string name="guide_qwen">Qwen Code (Alibaba)\n\nInstall the runtime (Termux/proot):\npip install -U qwen-code\n\nGuide: https://github.com/QwenLM/qwen-code</string>
+    <string name="guide_aider">Aider (Paul Gauthier)\n\nInstall the runtime (Termux/proot):\npython -m pip install -U aider-chat\n\nGuide: https://aider.chat/docs/install.html</string>
+    <string name="guide_goose">Goose (Block)\n\nInstall the runtime (Termux/proot):\ncurl -fsSL https://github.com/block/goose/releases/latest/download/install.sh | bash\n\nGuide: https://block.github.io/goose</string>
+    <string name="guide_continue">Continue\n\nContinue is a desktop IDE assistant (VS Code / JetBrains), not a terminal agent.\n\nIt cannot run inside this app yet.\n\nGuide: https://docs.continue.dev</string>
     <string name="agents_not_bundled_title">Coming soon</string>
     <string name="agents_not_bundled_message">The %1$s runtime is not bundled in this build yet. You can still set it as your default agent; Codex and OpenClaw can start right now.</string>
     <string name="agents_select_anyway">Select anyway</string>
@@ -79,4 +97,15 @@
     <string name="error_bootstrap">Failed to set up the environment. Please try again.</string>
     <string name="error_server">Failed to start the server.</string>
     <string name="retry">Retry</string>
+    <!-- Native terminal (manual fixing) -->
+    <string name="terminal_title">Terminal</string>
+    <string name="terminal_env_not_ready_title">Environment not ready</string>
+    <string name="terminal_env_not_ready_message">The Linux environment is not installed yet. Run the setup from the Home screen first, then open Terminal again.</string>
+    <string name="terminal_exited">Shell exited</string>
+    <string name="terminal_esc">ESC</string>
+    <string name="terminal_ctrl_c">^C</string>
+    <string name="terminal_ctrl_d">^D</string>
+    <string name="terminal_kill">Kill</string>
+    <string name="terminal_close">✕</string>
+
 </resources>

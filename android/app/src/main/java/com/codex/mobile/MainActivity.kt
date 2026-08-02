@@ -214,6 +214,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.repairCard).setOnClickListener {
             confirmRepair()
         }
+        findViewById<View>(R.id.terminalCard).setOnClickListener {
+            startActivity(Intent(this, TerminalActivity::class.java))
+        }
         findViewById<View>(R.id.statusActionBtn).setOnClickListener {
             confirmRepair()
         }
@@ -292,6 +295,7 @@ class MainActivity : AppCompatActivity() {
             agents = AgentCatalog.all,
             activeAgentId = currentAgent().id,
             onClick = ::onAgentSelected,
+            onRun = ::onRunAgent,
         )
         agentList.adapter = agentAdapter
     }
@@ -314,6 +318,71 @@ class MainActivity : AppCompatActivity() {
         } else {
             selectAgent(agent)
         }
+    }
+
+    /**
+     * Run button: starts the selected agent and opens its UI in the WebView
+     * once the server is actually running. For non-bundled agents it shows
+     * the install guide instead.
+     */
+    private fun onRunAgent(agent: Agent) {
+        if (!agent.bundled || agent.webUrl == null) {
+            showInstallGuide(agent)
+            return
+        }
+        selectAgent(agent)
+        when (agent.id) {
+            "openclaw" -> {
+                if (serverManager.isOpenClawInstalled()) {
+                    ensureOpenClawRunning(onReady = { showAgentWebUi(agent.webUrl) })
+                } else {
+                    Toast.makeText(
+                        this,
+                        R.string.agents_openclaw_not_installed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    maybeAskOpenClaw()
+                }
+            }
+            else -> startServerAndOpen(agent.webUrl)
+        }
+    }
+
+    /**
+     * Starts the codex-web-local server if it is not running, then opens the
+     * agent UI in the WebView. Only meaningful after the environment setup.
+     */
+    private fun startServerAndOpen(url: String) {
+        if (!prefs.getBoolean(KEY_SETUP_DONE, false)) {
+            Toast.makeText(this, R.string.agents_wait_setup, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (serverManager.isRunning) {
+            showAgentWebUi(url)
+            return
+        }
+        Toast.makeText(this, R.string.status_starting_server, Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                updateStatus("Starting server…")
+                if (!serverManager.startServer()) {
+                    throw RuntimeException("Failed to start server")
+                }
+                if (!serverManager.waitForServer(timeoutMs = 90_000)) {
+                    throw RuntimeException("Server did not start in time")
+                }
+                onUi {
+                    updateSettingsRows()
+                    refreshLaunchButton()
+                    showAgentWebUi(url)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Server start failed", e)
+                onUi {
+                    Toast.makeText(this, e.message ?: "Server failed", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.apply { isDaemon = true; start() }
     }
 
     private fun selectAgent(agent: Agent) {
@@ -577,7 +646,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun installOpenClawInBackground() {
+    private fun installOpenClawInBackground(onReady: (() -> Unit)? = null) {
         Thread {
             try {
                 if (!serverManager.isOpenClawInstalled()) {
@@ -595,15 +664,19 @@ class MainActivity : AppCompatActivity() {
                 serverManager.startOpenClawGateway()
                 updateStatus("Starting OpenClaw Control UI…")
                 serverManager.startOpenClawControlUiServer()
+                serverManager.waitForPort(CodexServerManager.OPENCLAW_CONTROL_UI_PORT, 60_000)
                 openclawUiStarted = true
-                onUi { refreshLaunchButton() }
+                onUi {
+                    refreshLaunchButton()
+                    onReady?.invoke()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "OpenClaw setup failed", e)
             }
         }.apply { isDaemon = true; start() }
     }
 
-    private fun ensureOpenClawRunning() {
+    private fun ensureOpenClawRunning(onReady: (() -> Unit)? = null) {
         Thread {
             try {
                 serverManager.configureOpenClawAuth()
@@ -611,8 +684,12 @@ class MainActivity : AppCompatActivity() {
                 serverManager.startOpenClawGateway()
                 updateStatus("Starting OpenClaw Control UI…")
                 serverManager.startOpenClawControlUiServer()
+                serverManager.waitForPort(CodexServerManager.OPENCLAW_CONTROL_UI_PORT, 60_000)
                 openclawUiStarted = true
-                onUi { refreshLaunchButton() }
+                onUi {
+                    refreshLaunchButton()
+                    onReady?.invoke()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "OpenClaw start failed", e)
             }
@@ -629,6 +706,29 @@ class MainActivity : AppCompatActivity() {
                 startSetup()
             }
             .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Shows the install guide for an agent whose runtime is not bundled in
+     * this build yet.
+     */
+    private fun showInstallGuide(agent: Agent) {
+        val guideRes = when (agent.id) {
+            "opencode" -> R.string.guide_opencode
+            "hermes" -> R.string.guide_hermes
+            "claude" -> R.string.guide_claude
+            "gemini" -> R.string.guide_gemini
+            "qwen" -> R.string.guide_qwen
+            "aider" -> R.string.guide_aider
+            "goose" -> R.string.guide_goose
+            "continue" -> R.string.guide_continue
+            else -> R.string.guide_coming_soon
+        }
+        AlertDialog.Builder(this)
+            .setTitle(agent.name)
+            .setMessage(guideRes)
+            .setPositiveButton(R.string.ok, null)
             .show()
     }
 
@@ -743,14 +843,10 @@ class MainActivity : AppCompatActivity() {
     private fun launchActiveAgent() {
         val agent = currentAgent()
         if (!agent.bundled || agent.webUrl == null) {
-            Toast.makeText(this, R.string.home_runtime_hint, Toast.LENGTH_SHORT).show()
+            showInstallGuide(agent)
             return
         }
-        if (!serverManager.isRunning) {
-            Toast.makeText(this, R.string.status_waiting_server, Toast.LENGTH_SHORT).show()
-            return
-        }
-        showAgentWebUi(agent.webUrl)
+        startServerAndOpen(agent.webUrl)
     }
 
     private fun showAgentWebUi(url: String) {

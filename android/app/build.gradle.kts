@@ -118,4 +118,8 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.google.android.material:material:1.12.0")
+
+    // Native PTY terminal (Termux terminal-emulator + terminal-view, JitPack)
+    implementation("com.github.termux.termux-app:terminal-emulator:v0.118.0")
+    implementation("com.github.termux.termux-app:terminal-view:v0.118.0")
 }

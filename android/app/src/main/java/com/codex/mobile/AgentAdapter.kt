@@ -5,16 +5,20 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 
 /**
  * Renders the agent picker list. Each row shows the agent's avatar, name,
- * tagline, category and a status chip (Active / Ready / Coming soon).
+ * tagline, category, a status chip and a Run/Install button.
+ * Tapping the row selects the agent; tapping Run starts it (or shows the
+ * install guide for agents whose runtime is not bundled yet).
  */
 class AgentAdapter(
     private val agents: List<Agent>,
     activeAgentId: String,
     private val onClick: (Agent) -> Unit,
+    private val onRun: (Agent) -> Unit,
 ) : RecyclerView.Adapter<AgentAdapter.ViewHolder>() {
 
     private var activeAgentId: String = activeAgentId
@@ -25,6 +29,7 @@ class AgentAdapter(
         val tagline: TextView = itemView.findViewById(R.id.agentTagline)
         val category: TextView = itemView.findViewById(R.id.agentCategory)
         val chip: TextView = itemView.findViewById(R.id.agentChip)
+        val runBtn: TextView = itemView.findViewById(R.id.agentRunBtn)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -69,7 +74,20 @@ class AgentAdapter(
             }
         }
 
+        if (agent.bundled) {
+            holder.runBtn.text = context.getString(R.string.agents_run)
+            holder.runBtn.backgroundTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
+            holder.runBtn.setTextColor(context.getColor(android.R.color.white))
+        } else {
+            holder.runBtn.text = context.getString(R.string.agents_install)
+            holder.runBtn.backgroundTintList =
+                ColorStateList.valueOf(context.getColor(R.color.chip_ready_bg))
+            holder.runBtn.setTextColor(context.getColor(R.color.chip_ready_fg))
+        }
+
         holder.itemView.setOnClickListener { onClick(agent) }
+        holder.runBtn.setOnClickListener { onRun(agent) }
     }
 
     fun updateActiveAgent(newActiveId: String) {

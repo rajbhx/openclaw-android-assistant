@@ -12,6 +12,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Termux terminal emulator + terminal view (native PTY shell UI)
+        maven("https://jitpack.io")
     }
 }
 

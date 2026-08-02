@@ -80,10 +80,20 @@
             android:textSize="10sp" />
     </LinearLayout>
 
-    <ImageView
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:src="@drawable/ic_chevron_right"
-        android:contentDescription="@string/agents_title"
-        android:alpha="0.5" />
+    <TextView
+        android:id="@+id/agentRunBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_pill"
+        android:backgroundTint="@color/accent"
+        android:gravity="center"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:text="@string/agents_run"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold" />
 </LinearLayout>

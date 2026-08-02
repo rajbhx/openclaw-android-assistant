@@ -190,6 +190,10 @@ log "Installing the Codex CLI (JS launcher) via npm..."
 "$NPM_BIN" install -g --prefix "$STAGE_PREFIX" --ignore-scripts --no-audit --no-fund \
     --omit=optional "@openai/codex@${CODEX_VERSION}"
 
+log "Installing codex-web-local (WebView UI server) via npm..."
+"$NPM_BIN" install -g --prefix "$STAGE_PREFIX" --ignore-scripts --no-audit --no-fund \
+    codex-web-local@0.1.0
+
 # ---------------------------------------------------------------------------
 # 5. Codex native binary (static musl, from its npm tarball)
 # ---------------------------------------------------------------------------
