@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.text.InputType
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -137,9 +138,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        serverManager.stopServer()
+        Thread {
+            serverManager.stopServer()
+        }.apply { isDaemon = true; start() }
         stopService(Intent(this, CodexForegroundService::class.java))
         try {
+            agentWebView.stopLoading()
+            (agentWebView.parent as? ViewGroup)?.removeView(agentWebView)
             agentWebView.destroy()
         } catch (_: Exception) {
         }
@@ -244,7 +249,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        agentWebView.onResume()
         refreshSshCard()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        agentWebView.onPause()
     }
 
     private fun showScreen(screen: Int) {
@@ -444,6 +455,16 @@ class MainActivity : AppCompatActivity() {
             "0.1.1"
         }
         versionText.text = version
+        // getCurrentWebViewPackage() requires API 26; older devices fall back
+        // to "unknown" (the system WebView is still what renders the UI).
+        val wv = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WebView.getCurrentWebViewPackage()
+        } else {
+            null
+        }
+        val wvLabel = wv?.let { "${it.packageName} ${it.versionName}" } ?: "unknown"
+        Log.i(TAG, "System WebView provider: $wvLabel")
+        versionText.text = "$version · WebView $wvLabel"
         buildTag.text = getString(R.string.home_build_tag, version)
     }
 
@@ -997,6 +1018,10 @@ class MainActivity : AppCompatActivity() {
 
     @android.annotation.SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
+        // Dev builds: allow chrome://inspect on the system WebView.
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
         agentWebView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
