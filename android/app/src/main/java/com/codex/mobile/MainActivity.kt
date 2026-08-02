@@ -800,12 +800,20 @@ class MainActivity : AppCompatActivity() {
         }
         sshStartBtn.isEnabled = false
         Thread {
-            val ok = sshManager.start { msg -> Log.d(TAG, "[ssh] $msg") }
+            var failure: String? = null
+            val ok = sshManager.start { msg ->
+                Log.d(TAG, "[ssh] $msg")
+                failure = msg
+            }
             onUi {
                 sshStartBtn.isEnabled = true
                 refreshSshCard()
                 if (!ok) {
-                    Toast.makeText(this, R.string.ssh_failed, Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        failure ?: getString(R.string.ssh_failed),
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
         }.apply { isDaemon = true; start() }

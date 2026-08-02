@@ -102,7 +102,7 @@ curl -fsSL --retry 3 -o "$WORK/Packages.gz" \
     "$REPO_BASE/dists/stable/main/binary-$ARCH/Packages.gz"
 
 python3 - "$WORK/Packages.gz" "${PACKAGES[@]}" > "$WORK/deb-urls.txt" <<'PYEOF'
-import gzip, sys
+import gzip, re, sys
 index = gzip.open(sys.argv[1], "rt").read()
 
 # Parse the Debian package index into stanzas (Package -> fields).
@@ -123,20 +123,65 @@ for stanza in index.split("\n\n"):
             current = key
         else:
             current = None
-    if "Package" in fields:
-        by_pkg[fields["Package"]] = fields
+    name = fields.get("Package")
+    if name and "Filename" in fields:
+        # Prefer the last (newest) stanza that has an actual .deb file.
+        by_pkg[name] = fields
+
+def dep_name(dep):
+    # 'libcurl (>= 1:3.2.1-1)' -> 'libcurl'
+    m = re.match(r"^\s*([A-Za-z0-9+._-]+)", dep)
+    return m.group(1) if m else None
+
+# Resolve the full runtime dependency closure from the same repo snapshot.
+# Overwriting bootstrap libraries with newer versions (e.g. libcurl) while
+# leaving their dependencies at bootstrap versions produces a broken prefix
+# at runtime ("cannot locate symbol ... referenced by libcurl.so").
+def resolve_deps(requested):
+    resolved = []
+    seen = set()
+    queue = list(requested)
+    while queue:
+        name = queue.pop(0)
+        if name in seen:
+            continue
+        seen.add(name)
+        fields = by_pkg.get(name)
+        if not fields:
+            continue  # virtual/provided package without its own .deb
+        resolved.append(name)
+        for item in fields.get("Depends", "").split(","):
+            # Alternatives ('a | b'): pick the first one that resolves.
+            chosen = None
+            for alt in item.split("|"):
+                n = dep_name(alt)
+                if n and n not in seen and n in by_pkg:
+                    chosen = n
+                    break
+            if chosen:
+                queue.append(chosen)
+    return resolved
 
 missing = []
+final = []
 for pkg in sys.argv[2:]:
     fields = by_pkg.get(pkg)
-    if not fields or "Filename" not in fields:
+    if not fields:
         missing.append(pkg)
         continue
+    if pkg not in final:
+        final.append(pkg)
+for pkg in resolve_deps(sys.argv[2:]):
+    if pkg not in final:
+        final.append(pkg)
+
+for name in final:
+    fields = by_pkg[name]
     print(fields["Filename"], fields.get("Size", "0"))
 if missing:
     print("ERROR: packages not in the index: " + ", ".join(missing), file=sys.stderr)
     sys.exit(1)
-print("resolved %d packages" % (len(sys.argv) - 2), file=sys.stderr)
+print("resolved %d packages (dependency closure)" % len(final), file=sys.stderr)
 PYEOF
 
 log "Downloading ${#PACKAGES[@]} .deb packages..."
@@ -215,6 +260,10 @@ P="$STAGE_PREFIX"
 D="$DEVICE_PREFIX"
 
 log "Creating wrapper scripts..."
+# bin/codex and bin/npm are symlinks to the real JS entry points
+# (lib/node_modules/.../codex.js, npm-cli.js); write the wrapper over the
+# symlink itself (rm first) so the actual JS files are NOT clobbered.
+rm -f "$P/bin/codex" "$P/bin/npm" "$P/bin/systemctl"
 cat > "$P/bin/codex" <<WEOF
 #!$D/bin/sh
 exec $D/bin/node $D/lib/node_modules/@openai/codex/bin/codex.js "\$@"

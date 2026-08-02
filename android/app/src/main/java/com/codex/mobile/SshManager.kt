@@ -258,6 +258,26 @@ class SshManager(private val context: Context) {
             return true
         }
 
+        // The APK's bundled preinstalled prefix already contains dropbear.
+        // If it's missing here, the on-device prefix is stale (the app was
+        // updated over an older install and install() keeps the old prefix).
+        // Re-extract the bundled prefix offline instead of downloading, and
+        // only fall back to the network path if the bundle lacks dropbear
+        // (e.g. a manually-built debug APK without the preinstalled asset).
+        val hasPreinstalled = runCatching {
+            context.assets.open("preinstalled-prefix.zip").use { }
+            true
+        }.getOrDefault(false)
+        if (hasPreinstalled) {
+            onProgress("Updating bundled environment (adds SSH server)…")
+            BootstrapInstaller.reinstall(context) { msg -> onProgress(msg) }
+            if (File(prefix, "bin/dropbear").exists() &&
+                File(prefix, "lib/libtermux-auth.so").exists()
+            ) {
+                return true
+            }
+        }
+
         onProgress("Installing SSH server (first run)…")
         val termuxPrefix = "/data/data/com.termux/files/usr"
 
