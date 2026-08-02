@@ -229,6 +229,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.terminalCard).setOnClickListener {
             startActivity(Intent(this, TerminalActivity::class.java))
         }
+        findViewById<View>(R.id.logcatCard).setOnClickListener {
+            startActivity(Intent(this, LogcatActivity::class.java))
+        }
         sshStartBtn.setOnClickListener { toggleSsh() }
         sshPasswordBtn.setOnClickListener { promptSshPassword() }
         findViewById<View>(R.id.statusActionBtn).setOnClickListener {

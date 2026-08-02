@@ -32,6 +32,11 @@
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".LogcatActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <service
             android:name=".CodexForegroundService"
             android:exported="false" />

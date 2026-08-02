@@ -25,6 +25,20 @@
     <string name="build_welcome_message">This is build v%1$s, signed with the stable OnePlus 7 key. If your launcher shows a different icon or name, you are opening an older AnyClaw — uninstall it first, then install this APK.</string>
     <string name="home_terminal_card_title">Terminal</string>
     <string name="home_terminal_card_subtitle">Manual shell for fixing</string>
+    <string name="home_logs_card_title">Live logs</string>
+    <string name="home_logs_card_subtitle">logcat for the app and servers</string>
+
+    <!-- Logcat viewer -->
+    <string name="log_title">Live logcat</string>
+    <string name="log_refresh">Refresh</string>
+    <string name="log_auto_on">Auto: ON</string>
+    <string name="log_auto_off">Auto: OFF</string>
+    <string name="log_close">Close</string>
+    <string name="log_copy">Copy</string>
+    <string name="log_export">Export</string>
+    <string name="log_copied">Logs copied to clipboard</string>
+    <string name="log_exported">Logs saved to %1$s</string>
+    <string name="log_empty">No matching log lines yet — start something, then refresh.</string>
 
     <!-- SSH -->
     <string name="home_ssh_card_title">SSH access</string>
