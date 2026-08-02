@@ -174,12 +174,22 @@ class MainActivity : AppCompatActivity() {
 
         agentList = findViewById(R.id.agentList)
 
-        loginStatusText = findViewById(R.id.rowLogin).findViewById(R.id.rowValue)
-        serverStatusText = findViewById(R.id.rowServer).findViewById(R.id.rowValue)
-        versionText = findViewById(R.id.rowVersion).findViewById(R.id.rowValue)
+        loginStatusText = findInRow(R.id.rowLogin, R.id.rowValue)
+        serverStatusText = findInRow(R.id.rowServer, R.id.rowValue)
+        versionText = findInRow(R.id.rowVersion, R.id.rowValue)
 
         agentWebView = findViewById(R.id.agentWebView)
         webMenuBtn = findViewById(R.id.webMenuBtn)
+    }
+
+    /**
+     * Finds a view inside a row included from [R.layout.view_setting_row].
+     * Uses ViewGroup.findViewById so it works on API 24+ and keeps the
+     * (shared) child ids scoped to the right row.
+     */
+    private fun <T : View> findInRow(rowId: Int, childId: Int): T {
+        @Suppress("UNCHECKED_CAST")
+        return (findViewById<View>(rowId) as android.view.ViewGroup).findViewById(childId) as T
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────
@@ -244,27 +254,27 @@ class MainActivity : AppCompatActivity() {
     private fun setupSettings() {
         val login = findViewById<View>(R.id.rowLogin)
         login.setOnClickListener { startLoginFlow() }
-        login.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_account)
-        login.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_login_title)
+        findInRow<ImageView>(R.id.rowLogin, R.id.rowIcon).setImageResource(R.drawable.ic_account)
+        findInRow<TextView>(R.id.rowLogin, R.id.rowTitle).setText(R.string.settings_login_title)
 
         val server = findViewById<View>(R.id.rowServer)
         server.setOnClickListener { toggleServer() }
-        server.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_bolt)
-        server.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_server_title)
+        findInRow<ImageView>(R.id.rowServer, R.id.rowIcon).setImageResource(R.drawable.ic_bolt)
+        findInRow<TextView>(R.id.rowServer, R.id.rowTitle).setText(R.string.settings_server_title)
 
         val repair = findViewById<View>(R.id.rowRepair)
         repair.setOnClickListener { confirmRepair() }
-        repair.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_build)
-        repair.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_repair_title)
+        findInRow<ImageView>(R.id.rowRepair, R.id.rowIcon).setImageResource(R.drawable.ic_build)
+        findInRow<TextView>(R.id.rowRepair, R.id.rowTitle).setText(R.string.settings_repair_title)
 
         val version = findViewById<View>(R.id.rowVersion)
-        version.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_settings)
-        version.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_version_title)
+        findInRow<ImageView>(R.id.rowVersion, R.id.rowIcon).setImageResource(R.drawable.ic_settings)
+        findInRow<TextView>(R.id.rowVersion, R.id.rowTitle).setText(R.string.settings_version_title)
 
         val device = findViewById<View>(R.id.rowDevice)
-        device.findViewById<ImageView>(R.id.rowIcon).setImageResource(R.drawable.ic_agents)
-        device.findViewById<TextView>(R.id.rowTitle).setText(R.string.settings_device_title)
-        device.findViewById<TextView>(R.id.rowValue).setText(R.string.settings_device_value)
+        findInRow<ImageView>(R.id.rowDevice, R.id.rowIcon).setImageResource(R.drawable.ic_agents)
+        findInRow<TextView>(R.id.rowDevice, R.id.rowTitle).setText(R.string.settings_device_title)
+        findInRow<TextView>(R.id.rowDevice, R.id.rowValue).setText(R.string.settings_device_value)
     }
 
     // ── Agent list ─────────────────────────────────────────────────────────
