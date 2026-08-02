@@ -7,6 +7,8 @@ import androidx.annotation.ColorRes
  * [bundled] means the runtime for this agent ships inside this APK build;
  * [webUrl] is the local UI served by the agent's server (only used once
  * the server is actually running).
+ * [installCommand] is the shell command that installs the runtime in the
+ * bundled environment (Termux/proot); null means it is not installable yet.
  */
 data class Agent(
     val id: String,
@@ -16,6 +18,7 @@ data class Agent(
     @ColorRes val colorRes: Int,
     val bundled: Boolean,
     val webUrl: String?,
+    val installCommand: String? = null,
 )
 
 object AgentCatalog {
@@ -47,6 +50,7 @@ object AgentCatalog {
             colorRes = R.color.agent_opencode,
             bundled = false,
             webUrl = null,
+            installCommand = "npm install -g opencode-ai",
         ),
         Agent(
             id = "hermes",
@@ -65,6 +69,7 @@ object AgentCatalog {
             colorRes = R.color.agent_claude,
             bundled = false,
             webUrl = null,
+            installCommand = "npm install -g @anthropic-ai/claude-code",
         ),
         Agent(
             id = "gemini",
@@ -74,6 +79,7 @@ object AgentCatalog {
             colorRes = R.color.agent_gemini,
             bundled = false,
             webUrl = null,
+            installCommand = "npm install -g @google/gemini-cli",
         ),
         Agent(
             id = "qwen",
@@ -83,6 +89,7 @@ object AgentCatalog {
             colorRes = R.color.agent_qwen,
             bundled = false,
             webUrl = null,
+            installCommand = "pip install -U qwen-code",
         ),
         Agent(
             id = "aider",
@@ -92,6 +99,7 @@ object AgentCatalog {
             colorRes = R.color.agent_aider,
             bundled = false,
             webUrl = null,
+            installCommand = "python -m pip install -U aider-chat",
         ),
         Agent(
             id = "goose",
@@ -101,6 +109,7 @@ object AgentCatalog {
             colorRes = R.color.agent_goose,
             bundled = false,
             webUrl = null,
+            installCommand = "curl -fsSL https://github.com/block/goose/releases/latest/download/install.sh | bash",
         ),
         Agent(
             id = "continue",

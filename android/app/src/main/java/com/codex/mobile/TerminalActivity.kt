@@ -29,6 +29,9 @@ class TerminalActivity : AppCompatActivity(), TerminalViewClient, TerminalSessio
 
     companion object {
         private const val TAG = "TerminalActivity"
+
+        /** Optional shell command typed into the session right after launch. */
+        const val EXTRA_BOOT_COMMAND = "extra_boot_command"
     }
 
     private lateinit var terminalView: TerminalView
@@ -100,6 +103,11 @@ class TerminalActivity : AppCompatActivity(), TerminalViewClient, TerminalSessio
             terminalView.attachSession(newSession)
             terminalView.requestFocus()
             showKeyboard()
+            val boot = intent.getStringExtra(EXTRA_BOOT_COMMAND)
+            if (!boot.isNullOrBlank()) {
+                pathLabel.text = boot
+                newSession.write((boot + "\n").toByteArray(), 0, boot.length + 1)
+            }
         }
     }
 

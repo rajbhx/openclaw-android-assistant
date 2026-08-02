@@ -864,11 +864,20 @@ class MainActivity : AppCompatActivity() {
             "continue" -> R.string.guide_continue
             else -> R.string.guide_coming_soon
         }
-        AlertDialog.Builder(this)
+        val builder = AlertDialog.Builder(this)
             .setTitle(agent.name)
             .setMessage(guideRes)
-            .setPositiveButton(R.string.ok, null)
-            .show()
+        val cmd = agent.installCommand
+        if (cmd != null) {
+            builder.setPositiveButton(R.string.agents_install_in_terminal) { _, _ ->
+                startActivity(
+                    Intent(this, TerminalActivity::class.java)
+                        .putExtra(TerminalActivity.EXTRA_BOOT_COMMAND, cmd)
+                )
+            }
+        }
+        builder.setNegativeButton(R.string.cancel, null)
+        builder.show()
     }
 
     // ── Login (Settings) ───────────────────────────────────────────────────

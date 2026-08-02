@@ -67,7 +67,11 @@ class AgentAdapter(
                 holder.chip.setTextColor(context.getColor(R.color.chip_ready_fg))
             }
             else -> {
-                holder.chip.text = context.getString(R.string.agents_chip_soon)
+                val soon = agent.installCommand == null
+                holder.chip.text = context.getString(
+                    if (soon) R.string.agents_chip_soon
+                    else R.string.agents_chip_not_installed
+                )
                 holder.chip.backgroundTintList =
                     ColorStateList.valueOf(context.getColor(R.color.chip_soon_bg))
                 holder.chip.setTextColor(context.getColor(R.color.chip_soon_fg))
