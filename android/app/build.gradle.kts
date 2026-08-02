@@ -47,7 +47,7 @@ android {
         // build is installable over the previous one. Local builds fall
         // back to 3.
         versionCode = maxOf(3, System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 3)
-        versionName = "0.3.0"
+        versionName = "0.4.0"
     }
 
     signingConfigs {
