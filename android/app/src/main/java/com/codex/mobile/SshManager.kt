@@ -50,7 +50,19 @@ class SshManager(private val context: Context) {
     private var sshProcess: Process? = null
 
     val isRunning: Boolean
-        get() = sshProcess?.isAlive == true
+        get() = sshProcess?.isRunning() == true
+
+    /**
+     * API 24-compatible replacement for [java.lang.Process.isAlive] (added
+     * in API 26): a process is running unless exitValue() reports it exited.
+     */
+    private fun Process.isRunning(): Boolean =
+        try {
+            exitValue()
+            false
+        } catch (_: IllegalThreadStateException) {
+            true
+        }
 
     fun isPasswordSet(): Boolean = prefs.getBoolean(KEY_PASSWORD_SET, false)
 
@@ -167,7 +179,7 @@ class SshManager(private val context: Context) {
         // Wait for the port to accept connections.
         var listening = false
         for (attempt in 0 until 10) {
-            if (!proc.isAlive) break
+            if (!proc.isRunning()) break
             try {
                 Socket("127.0.0.1", SSH_PORT).use { }
                 listening = true
@@ -182,7 +194,7 @@ class SshManager(private val context: Context) {
             }
         }
 
-        if (!listening || !proc.isAlive) {
+        if (!listening || !proc.isRunning()) {
             sshProcess = null
             // Clean up a half-started server (e.g. proot ran but dropbear
             // failed to bind) so a retry doesn't hit a stale pidfile.
