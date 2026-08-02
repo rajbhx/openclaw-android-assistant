@@ -240,10 +240,12 @@ PidFile $TERMUX_PREFIX/var/run/sshd.pid
 PermitRootLogin yes
 PasswordAuthentication yes
 PubkeyAuthentication yes
+SshdAuthPath $TERMUX_PREFIX/libexec/sshd-auth
+SshdSessionPath $TERMUX_PREFIX/libexec/sshd-session
 UsePAM no
 X11Forwarding no
 AllowTcpForwarding yes
-Subsystem sftp $TERMUX_PREFIX/lib/ssh/sftp-server
+Subsystem sftp $TERMUX_PREFIX/libexec/sftp-server
 SSHDCONF
 chmod 600 "$STAGE_PREFIX/etc/ssh/sshd_config"
 

@@ -153,8 +153,21 @@ class SshManager(private val context: Context) {
         // NOT be inherited by the proot subprocess — proot reports
         // "termux-exec is active ... please unset LD_PRELOAD" and fails to
         // exec the traced child when it is set.
+        // Normalize the tmp dir to its real /data/data/... form: proot
+        // creates scratch dirs from TMPDIR but later resolves them through
+        // /proc/self/fd, and a /data/user/0/... vs /data/data/... mismatch
+        // makes its cleanup report "trying to remove a directory outside of
+        // ..." (harmless but noisy).
+        val canonicalTmp = paths.tmpDir.replace("/data/user/0/", "/data/data/")
         val prootEnv = serverManager.shellEnvironment()
             .filterKeys { it != "LD_PRELOAD" }
+            .toMutableMap()
+            .apply {
+                put("TMPDIR", canonicalTmp)
+                put("TMP", canonicalTmp)
+                put("TEMP", canonicalTmp)
+                put("PROOT_TMP_DIR", canonicalTmp)
+            }
 
         // Clear leftover proot scratch dirs from failed runs (proot leaves
         // them behind when a traced child fails to exec).
@@ -269,7 +282,8 @@ class SshManager(private val context: Context) {
         File(prefix, "var/run").mkdirs()
 
         val configFile = File(sshDir, "sshd_config")
-        if (!configFile.exists()) {
+        // Rewrite if missing or from an older build (marker: SshdAuthPath).
+        if (!configFile.exists() || !configFile.readText().contains("SshdAuthPath")) {
             configFile.writeText(
                 """
                 Port 8022
@@ -280,10 +294,15 @@ class SshManager(private val context: Context) {
                 PasswordAuthentication yes
                 PubkeyAuthentication yes
                 AuthorizedKeysFile ${paths.homeDir}/.ssh/authorized_keys
+                # OpenSSH 10.x re-execs into libexec/sshd-auth and
+                # libexec/sshd-session. Point them at our prefix so sshd also
+                # works when launched without proot path rewriting.
+                SshdAuthPath ${prefix}/libexec/sshd-auth
+                SshdSessionPath ${prefix}/libexec/sshd-session
                 UsePAM no
                 X11Forwarding no
                 AllowTcpForwarding yes
-                Subsystem sftp ${prefix}/lib/ssh/sftp-server
+                Subsystem sftp ${prefix}/libexec/sftp-server
                 """.trimIndent() + "\n",
             )
             configFile.setReadable(true, true)
@@ -316,14 +335,18 @@ class SshManager(private val context: Context) {
             """
             #!${prefix}/bin/sh
             unset LD_PRELOAD
-            exec ${prefix}/bin/proot -b ${paths.filesDir}:/data/data/com.termux/files -w ${paths.homeDir} ${prefix}/bin/sshd.real "${'$'}@"
+            exec ${prefix}/bin/proot --kill-on-exit -b ${paths.filesDir}:/data/data/com.termux/files -w ${paths.homeDir} ${prefix}/bin/sshd.real -f ${prefix}/etc/ssh/sshd_config -e "${'$'}@"
             """.trimIndent() + "\n",
         )
         sshdBin.setExecutable(true, true)
         val wrappedTest = serverManager.runInPrefix("sshd -t 2>&1")
-        onProgress(
-            if (wrappedTest == 0) "sshd ready (proot wrapper)" else "sshd -t still failing (code $wrappedTest)"
-        )
+        if (wrappedTest == 0) {
+            onProgress("sshd ready (proot wrapper)")
+        } else {
+            onProgress(
+                "sshd -t failed again (code $wrappedTest) - check PROOT_LOADER=${prefix}/libexec/proot/loader exists"
+            )
+        }
         return wrappedTest == 0
     }
 

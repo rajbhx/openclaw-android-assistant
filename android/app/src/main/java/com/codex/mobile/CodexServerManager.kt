@@ -1654,6 +1654,14 @@ WEOF
             "TMP" to paths.tmpDir,
             "TEMP" to paths.tmpDir,
             "PROOT_TMP_DIR" to paths.tmpDir,
+            // Termux proot is built with PROOT_UNBUNDLE_LOADER baked to the
+            // Termux package path (/data/data/com.termux/...), which does not
+            // exist on this device. proot execs that baked loader path
+            // directly (no bind translation), so every guest exec (dropbear,
+            // sshd, login shells) failed with ENOENT. Point it at our own
+            // unbundled loader instead.
+            "PROOT_LOADER" to "${paths.prefixDir}/libexec/proot/loader",
+            "PROOT_LOADER_32" to "${paths.prefixDir}/libexec/proot/loader32",
             "TERM" to "xterm-256color",
             "ANDROID_DATA" to "/data",
             "ANDROID_ROOT" to "/system",
