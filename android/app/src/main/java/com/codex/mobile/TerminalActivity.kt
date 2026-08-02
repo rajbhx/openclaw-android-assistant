@@ -191,10 +191,4 @@ class TerminalActivity : AppCompatActivity(), TerminalViewClient, TerminalSessio
     override fun onTerminalCursorStateChange(state: Boolean) = Unit
 
     override fun getTerminalCursorStyle(): Int? = null
-
-    override fun logVerbose(tag: String, message: String) { Log.v(tag, message) }
-
-    override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) { Log.e(tag, message, e) }
-
-    override fun logStackTrace(tag: String, e: Exception) { Log.e(tag, "Stack trace", e) }
 }
