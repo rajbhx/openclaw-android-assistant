@@ -1455,6 +1455,12 @@ WEOF
             return false
         }
 
+        // Kill any stale codex-web-local process still bound to the server
+        // port (an orphan from a previous app process would otherwise win the
+        // port and crash-loop every new launch with EADDRINUSE).
+        killByPortScan(SERVER_PORT)
+        Thread.sleep(300)
+
         val shell = "${paths.prefixDir}/bin/sh"
         val command = "exec node $serverScript --port $SERVER_PORT --no-password"
 
@@ -1471,6 +1477,16 @@ WEOF
 
         monitorProcess(proc, "[server]") {
             if (serverProcess === proc) serverProcess = null
+        }
+
+        // Sanity check: if our fresh process died but something still answers
+        // the port, a stale owner survived the pre-cleanup — remove it so the
+        // next attempt can bind.
+        Thread.sleep(1500)
+        if (!isProcessRunning(proc) && waitForPort(SERVER_PORT, 500)) {
+            Log.w(TAG, "Port $SERVER_PORT was answered by a stale process after launch; cleaning up")
+            killByPortScan(SERVER_PORT)
+            return false
         }
 
         return true
