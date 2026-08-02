@@ -52,6 +52,7 @@ REPO_BASE="https://packages.termux.dev/apt/termux-main"
 PACKAGES=(
     proot libtalloc termux-exec
     dropbear zlib termux-auth openssl
+    openssh openssh-sftp-server
     c-ares libicu libsqlite nodejs-lts npm
     python python-pip
     git make

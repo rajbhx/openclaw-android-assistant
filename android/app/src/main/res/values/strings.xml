@@ -42,7 +42,7 @@
 
     <!-- SSH -->
     <string name="home_ssh_card_title">SSH access</string>
-    <string name="home_ssh_card_subtitle">Remote shell to fix errors — same environment as the terminal</string>
+    <string name="home_ssh_card_subtitle">Remote shell to fix errors — dropbear + sshd preinstalled, same environment as the terminal</string>
     <string name="ssh_status_stopped">Stopped</string>
     <string name="ssh_status_running">Running · port %1$d</string>
     <string name="ssh_start">Start SSH</string>
