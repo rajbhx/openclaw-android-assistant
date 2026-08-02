@@ -19,6 +19,8 @@
     <string name="home_agents_card_subtitle">Choose your agent</string>
     <string name="home_launch_agent">Open agent UI</string>
     <string name="home_build_tag">v%1$s · OnePlus 7 build</string>
+    <string name="build_welcome_title">AnyClaw OP7</string>
+    <string name="build_welcome_message">This is build v%1$s, signed with the stable OnePlus 7 key. If your launcher shows a different icon or name, you are opening an older AnyClaw — uninstall it first, then install this APK.</string>
     <string name="home_repair_card_title">Repair environment</string>
     <string name="home_repair_card_subtitle">Fix &amp; reinstall missing packages</string>
 

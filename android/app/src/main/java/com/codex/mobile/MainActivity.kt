@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_SETUP_DONE = "setup_done"
         private const val KEY_OPENCLAW_DECIDED = "openclaw_decided"
         private const val KEY_OPENCLAW_OPT_IN = "openclaw_opt_in"
+        private const val KEY_LAST_SEEN_VERSION = "last_seen_version"
 
         const val SCREEN_HOME = 0
         const val SCREEN_AGENTS = 1
@@ -109,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         updateActiveAgentCard()
         updateSettingsRows()
         setupVersion()
+        announceNewBuild()
 
         requestBatteryOptimizationExemption()
         startForegroundService()
@@ -350,6 +352,23 @@ class MainActivity : AppCompatActivity() {
         }
         versionText.text = version
         buildTag.text = getString(R.string.home_build_tag, version)
+    }
+
+    /**
+     * On the first launch after an update (or a fresh install) this shows a
+     * dialog naming the exact build, so it is impossible to confuse this APK
+     * with any other AnyClaw build.
+     */
+    private fun announceNewBuild() {
+        val version = BuildConfig.VERSION_NAME
+        val lastSeen = prefs.getString(KEY_LAST_SEEN_VERSION, null)
+        if (lastSeen == version) return
+        prefs.edit().putString(KEY_LAST_SEEN_VERSION, version).apply()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.build_welcome_title)
+            .setMessage(getString(R.string.build_welcome_message, version))
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     private fun updateSettingsRows() {
