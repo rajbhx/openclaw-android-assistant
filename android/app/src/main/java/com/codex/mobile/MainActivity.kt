@@ -764,7 +764,7 @@ class MainActivity : AppCompatActivity() {
             if (running) {
                 getString(R.string.ssh_status_running, SshManager.SSH_PORT)
             } else {
-                R.string.ssh_status_stopped
+                getString(R.string.ssh_status_stopped)
             }
         )
         sshStartBtn.setText(if (running) R.string.ssh_stop else R.string.ssh_start)
