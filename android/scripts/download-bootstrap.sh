@@ -17,7 +17,7 @@ ASSETS_DIR="$PROJECT_DIR/app/src/main/assets"
 ARCH="${1:-aarch64}"
 
 # Use the latest bootstrap from Termux releases
-BOOTSTRAP_VERSION="bootstrap-2026.02.12-r1+apt.android-7"
+BOOTSTRAP_VERSION="bootstrap-2026.08.16-r1+apt.android-7"
 BOOTSTRAP_URL="https://github.com/termux/termux-packages/releases/download/${BOOTSTRAP_VERSION}/bootstrap-${ARCH}.zip"
 
 # Alternative: SourceForge mirror
