@@ -2,65 +2,155 @@ name: Build APK
 
 on:
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+      sign_release:
+        description: 'Sign release build'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
 
 permissions:
   contents: write
+  packages: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '17'
+  GRADLE_VERSION: '8.11.1'
+  NODE_VERSION: '21'
 
 jobs:
-  build:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        working-directory: android
     steps:
-      - name: Checkout repository
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Run lint
+        run: ./gradlew lint --no-daemon --stacktrace
+        continue-on-error: true
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: android/app/build/reports/lint-results*.html
+          retention-days: 7
+
+  build:
+    name: Build ${{ matrix.build_type }}
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: ${{ github.event.inputs.build_type == 'release' && fromJson('["release"]') || fromJson('["debug"]') }}
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "21"
-          cache: "npm"
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ matrix.build_type }}" = "release" ]; then
+            VERSION_NAME=$(grep 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+            VERSION_CODE=$(grep 'versionCode' app/build.gradle.kts | sed 's/.*= \([0-9]*\).*/\1/')
+          else
+            VERSION_NAME="debug"
+            VERSION_CODE=0
+          fi
+          echo "name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "code=${VERSION_CODE}" >> $GITHUB_OUTPUT
+          echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: Install npm dependencies
-        run: npm ci --ignore-scripts || npm install
-
-      - name: Build Vue frontend
-        run: npm run build:frontend
-
-      - name: Build CLI server
-        run: npm run build:cli
-
-      - name: Bundle server into APK assets
-        run: bash android/scripts/build-server-bundle.sh
-
-      - name: Download Termux bootstrap
-        run: bash android/scripts/download-bootstrap.sh
-
-      - name: Set up JDK 17
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: "17"
-          distribution: "temurin"
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug
+      - name: Download Termux bootstrap
+        run: bash scripts/download-bootstrap.sh
+
+      - name: Build APK
+        run: ./gradlew assemble${{ matrix.build_type == 'release' && 'Release' || 'Debug' }} --no-daemon --stacktrace
+
+      - name: Get APK info
+        id: apk
+        run: |
+          APK_DIR="app/build/outputs/apk/${{ matrix.build_type }}"
+          APK_FILE=$(find "$APK_DIR" -name "*.apk" | head -1)
+          if [ -z "$APK_FILE" ]; then
+            echo "❌ No APK found in $APK_DIR"
+            exit 1
+          fi
+          APK_SIZE=$(du -h "$APK_FILE" | cut -f1)
+          echo "path=${APK_FILE}" >> $GITHUB_OUTPUT
+          echo "size=${APK_SIZE}" >> $GITHUB_OUTPUT
+          echo "📦 APK: ${APK_FILE} (${APK_SIZE})"
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/anyclaw.apk
+        run: |
+          APK_DIR="app/build/outputs/apk/${{ matrix.build_type }}"
+          APK_NAME="anyclaw-${{ steps.version.outputs.name }}-${{ matrix.build_type }}-${{ steps.version.outputs.short_sha }}.apk"
+          cp "${{ steps.apk.outputs.path }}" "${APK_DIR}/${APK_NAME}"
+          echo "APK_PATH=${APK_DIR}/${APK_NAME}" >> $GITHUB_ENV
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: anyclaw
-          path: android/app/build/outputs/apk/debug/anyclaw.apk
+          name: anyclaw-${{ matrix.build_type }}-${{ steps.version.outputs.short_sha }}
+          path: ${{ env.APK_PATH }}
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Generate changelog
-        if: github.ref_type == 'branch'
+        if: matrix.build_type == 'release' && github.ref == 'refs/heads/main'
         id: changelog
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | head -1)
@@ -69,29 +159,44 @@ jobs:
           else
             CHANGES=$(git log --pretty=format:"- %s" --reverse -20)
           fi
-          {
-            echo "notes<<CHANGELOG_EOF"
-            echo "$CHANGES"
-            echo "CHANGELOG_EOF"
-          } >> "$GITHUB_OUTPUT"
+          # Escape for GitHub Actions output
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "notes<<${EOF}" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "${EOF}" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        if: github.ref_type == 'branch'
+        if: matrix.build_type == 'release' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: "AnyClaw v${{ github.run_number }} (${{ github.ref_name }})"
+          tag_name: v${{ steps.version.outputs.name }}-${{ steps.version.outputs.short_sha }}
+          name: "AnyClaw v${{ steps.version.outputs.name }} (${{ steps.version.outputs.short_sha }})"
           body: |
             🦞 **AnyClaw** — OpenClaw + Codex on Android
 
-            📱 Install the APK on any ARM64 Android 7.0+ device. No root required.
+            📱 Install the APK on any ARM64 Android 8.0+ device. No root required.
 
-            ### Changes
+            **What's New**
             ${{ steps.changelog.outputs.notes }}
 
             ---
             Branch: ${{ github.ref_name }}
             Built from commit ${{ github.sha }}
-          files: android/app/build/outputs/apk/debug/anyclaw.apk
+          files: ${{ env.APK_PATH }}
           draft: false
           prerelease: false
+          generate_release_notes: true
+
+      - name: Summary
+        run: |
+          echo "## 🏗️ Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Type** | \`${{ matrix.build_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${{ steps.version.outputs.name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ steps.version.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **APK Size** | ${{ steps.apk.outputs.size }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📥 Download" >> $GITHUB_STEP_SUMMARY
+          echo "Download the APK artifact from the workflow run." >> $GITHUB_STEP_SUMMARY
