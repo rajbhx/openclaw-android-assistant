@@ -43,8 +43,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onApiKeySubmit(apiKey: String) {
-        _state.update { it.copy(apiKey = apiKey, phase = SetupState.Phase.STARTING_SERVER) }
-        viewModelScope.launch { startServer() }
+        viewModelScope.launch {
+            try {
+                // Save the API key to config
+                withContext(Dispatchers.IO) {
+                    serverRepo.saveApiKey(apiKey)
+                }
+                _state.update { it.copy(apiKey = apiKey, phase = SetupState.Phase.STARTING_SERVER) }
+                startServer()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save API key", e)
+                _state.update {
+                    it.copy(
+                        phase = SetupState.Phase.ERROR,
+                        error = "Failed to save API key: ${e.message}",
+                    )
+                }
+            }
+        }
     }
 
     fun onDismissError() {
@@ -110,7 +126,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updatePhase(SetupState.Phase.INSTALLING_CODEX, 0.8f, "Codex CLI ready")
 
         // Step 5: Check API key
-        val apiKey = serverRepo.getApiKey()
+        val apiKey = withContext(Dispatchers.IO) { serverRepo.getApiKey() }
         if (apiKey == null) {
             _state.update {
                 it.copy(
@@ -159,6 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun updateDetail(detail: String) {
+        // MutableStateFlow.update is thread-safe, so this can be called from any thread
         _state.update { it.copy(detail = detail) }
     }
 }

@@ -2,7 +2,7 @@ package com.codex.mobile.repository
 
 import android.content.Context
 import android.util.Log
-import com.codex.mobile.state.BootstrapInstaller
+import com.codex.mobile.BootstrapInstaller
 import java.io.File
 
 /**

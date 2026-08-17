@@ -19,12 +19,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,7 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.codex.mobile.state.SetupState
@@ -47,6 +60,7 @@ import com.codex.mobile.ui.components.StepState
 fun LoadingScreen(
     state: SetupState,
     onRetry: () -> Unit,
+    onApiKeySubmit: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -66,7 +80,7 @@ fun LoadingScreen(
                     onRetry = onRetry,
                 )
                 SetupState.Phase.API_KEY_PROMPT -> ApiKeyPrompt(
-                    onSubmit = { /* handled by parent */ },
+                    onSubmit = onApiKeySubmit,
                 )
                 else -> LoadingContent(state = state)
             }
@@ -88,7 +102,6 @@ private fun LoadingContent(state: SetupState) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        // Animated loading indicator
         AnimatedLoadingIndicator(
             progress = progress,
             modifier = Modifier.size(120.dp),
@@ -96,7 +109,6 @@ private fun LoadingContent(state: SetupState) {
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // App title
         Text(
             text = "AnyClaw",
             style = MaterialTheme.typography.headlineLarge,
@@ -114,7 +126,6 @@ private fun LoadingContent(state: SetupState) {
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // Status card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -145,7 +156,6 @@ private fun LoadingContent(state: SetupState) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Progress bar
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -177,7 +187,6 @@ private fun LoadingContent(state: SetupState) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Phase-specific status steps
         val steps = remember(state.phase) {
             buildStepStates(state)
         }
@@ -256,6 +265,8 @@ private fun ErrorContent(
 @Composable
 private fun ApiKeyPrompt(onSubmit: (String) -> Unit) {
     var apiKey by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = Modifier
@@ -289,8 +300,6 @@ private fun ApiKeyPrompt(onSubmit: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // API key input would go here - using a basic text field
-        // In production, use a proper text field composable
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -302,14 +311,52 @@ private fun ApiKeyPrompt(onSubmit: (String) -> Unit) {
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Placeholder for API key input
-                Text(
-                    text = "API Key Input",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.alpha(0.5f),
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text("API Key") },
+                    placeholder = { Text("sk-…") },
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) {
+                                    Icons.Filled.VisibilityOff
+                                } else {
+                                    Icons.Filled.Visibility
+                                },
+                                contentDescription = if (passwordVisible) {
+                                    "Hide API key"
+                                } else {
+                                    "Show API key"
+                                },
+                            )
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (apiKey.isNotBlank()) {
+                                focusManager.clearFocus()
+                                onSubmit(apiKey)
+                            }
+                        },
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    ),
                 )
             }
         }
@@ -317,8 +364,11 @@ private fun ApiKeyPrompt(onSubmit: (String) -> Unit) {
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = { onSubmit(apiKey) },
-            enabled = apiKey.isNotBlank(),
+            onClick = {
+                focusManager.clearFocus()
+                onSubmit(apiKey)
+            },
+            enabled = apiKey.isNotBlank() && apiKey.startsWith("sk-"),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -329,6 +379,15 @@ private fun ApiKeyPrompt(onSubmit: (String) -> Unit) {
                 fontWeight = FontWeight.SemiBold,
             )
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Your key is stored securely on device",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.alpha(0.6f),
+        )
     }
 }
 

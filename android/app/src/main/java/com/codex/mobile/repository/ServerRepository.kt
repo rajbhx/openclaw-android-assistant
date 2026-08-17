@@ -2,7 +2,7 @@ package com.codex.mobile.repository
 
 import android.content.Context
 import android.util.Log
-import com.codex.mobile.state.BootstrapInstaller
+import com.codex.mobile.BootstrapInstaller
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -19,7 +19,6 @@ class ServerRepository(private val context: Context) {
         private const val TAG = "ServerRepository"
         const val SERVER_PORT = 18923
         private const val PROXY_PORT = 18924
-        private const val CODEX_VERSION = "0.104.0"
         const val OPENCLAW_GATEWAY_PORT = 18789
         const val OPENCLAW_CONTROL_UI_PORT = 19001
     }

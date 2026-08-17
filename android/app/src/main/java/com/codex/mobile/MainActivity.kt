@@ -16,8 +16,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -62,13 +62,10 @@ class MainActivity : ComponentActivity() {
                     ) { isComplete ->
                         when {
                             isComplete -> WebViewScreen()
-                            state.phase == SetupState.Phase.ERROR -> LoadingScreen(
-                                state = state,
-                                onRetry = viewModel::onRetry,
-                            )
                             else -> LoadingScreen(
                                 state = state,
                                 onRetry = viewModel::onRetry,
+                                onApiKeySubmit = viewModel::onApiKeySubmit,
                             )
                         }
                     }

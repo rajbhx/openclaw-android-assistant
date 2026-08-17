@@ -1,14 +1,13 @@
 package com.codex.mobile.ui.screens
 
 import android.annotation.SuppressLint
+import android.util.Log
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.codex.mobile.repository.ServerRepository
@@ -51,7 +49,7 @@ fun WebViewScreen(
                         setSupportZoom(false)
                         loadWithOverviewMode = true
                         useWideViewPort = true
-                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
 
                     webViewClient = object : WebViewClient() {
@@ -68,7 +66,7 @@ fun WebViewScreen(
 
                     webChromeClient = object : WebChromeClient() {
                         override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
-                            android.util.Log.d(
+                            Log.d(
                                 "WebViewScreen",
                                 "[JS] ${msg.sourceId()}:${msg.lineNumber()} ${msg.message()}"
                             )

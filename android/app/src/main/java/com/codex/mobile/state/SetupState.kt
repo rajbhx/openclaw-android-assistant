@@ -1,5 +1,7 @@
 package com.codex.mobile.state
 
+import com.codex.mobile.BootstrapInstaller
+
 /**
  * Represents the complete UI state of the application startup flow.
  * Immutable data class ensuring thread-safe state updates via StateFlow.
