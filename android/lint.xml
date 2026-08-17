@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Treat all warnings as warnings, not errors -->
+    <issue id="GradleDependency" severity="warning" />
+    <issue id="OldTargetApi" severity="warning" />
+
+    <!-- Allow missing classes for Compose -->
+    <issue id="MissingRegistration" severity="ignore" />
+
+    <!-- Allow hardcoded strings in Compose -->
+    <issue id="HardcodedText" severity="ignore" />
+
+    <!-- Allow unused resources (they may be used in Compose) -->
+    <issue id="UnusedResources" severity="warning" />
+
+    <!-- Compose specific -->
+    <issue id="ComposableNaming" severity="warning" />
+    <issue id="ComposableModifierFactory" severity="warning" />
+    <issue id="ModifierParameter" severity="warning" />
+    <issue id="PreviewParameterProvider" severity="warning" />
+</lint>

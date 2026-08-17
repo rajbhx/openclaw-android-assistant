@@ -37,6 +37,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startSetup()
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        serverRepo.stopServer()
+        Log.i(TAG, "ViewModel cleared, server stopped")
+    }
+
     fun onRetry() {
         _state.update { SetupState() }
         startSetup()
@@ -45,7 +51,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun onApiKeySubmit(apiKey: String) {
         viewModelScope.launch {
             try {
-                // Save the API key to config
                 withContext(Dispatchers.IO) {
                     serverRepo.saveApiKey(apiKey)
                 }
@@ -175,7 +180,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun updateDetail(detail: String) {
-        // MutableStateFlow.update is thread-safe, so this can be called from any thread
         _state.update { it.copy(detail = detail) }
     }
 }

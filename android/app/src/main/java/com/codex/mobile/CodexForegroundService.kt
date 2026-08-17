@@ -1,8 +1,6 @@
 package com.codex.mobile
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
@@ -19,7 +17,6 @@ class CodexForegroundService : Service() {
 
     companion object {
         private const val TAG = "CodexForegroundService"
-        private const val CHANNEL_ID = "codex_running"
         private const val NOTIFICATION_ID = 1
     }
 
@@ -27,9 +24,14 @@ class CodexForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
                 buildNotification(),
@@ -51,23 +53,6 @@ class CodexForegroundService : Service() {
         Log.i(TAG, "Foreground service destroyed")
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "AnyClaw Server",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Keeps the Codex server running in the background"
-                setShowBadge(false)
-                enableVibration(false)
-                enableLights(false)
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
-    }
-
     private fun buildNotification(): Notification {
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -80,7 +65,7 @@ class CodexForegroundService : Service() {
         )
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
+            Notification.Builder(this, AnyClawApp.NOTIFICATION_CHANNEL_ID)
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
